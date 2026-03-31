@@ -1,0 +1,64 @@
+{
+  "id": "memos-exchange-local-memory",
+  "name": "MemOS Exchange 本地记忆",
+  "description": "本地记忆存储和检索插件 - 完全本地化，无需网络依赖",
+  "version": "0.1.0",
+  "kind": "lifecycle",
+  "main": "./index.js",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "description": "是否启用插件",
+        "default": true
+      },
+      "memoryLimitNumber": {
+        "type": "integer",
+        "description": "注入记忆数量上限",
+        "default": 6
+      },
+      "preferenceLimitNumber": {
+        "type": "integer",
+        "description": "注入偏好数量上限",
+        "default": 6
+      },
+      "minScore": {
+        "type": "number",
+        "description": "最低相关性分数阈值",
+        "default": 0.3,
+        "minimum": 0,
+        "maximum": 1
+      },
+      "includeAssistant": {
+        "type": "boolean",
+        "description": "是否保存助手回复",
+        "default": true
+      },
+      "maxMessageChars": {
+        "type": "integer",
+        "description": "消息最大字符数",
+        "default": 5000
+      },
+      "searchEngine": {
+        "type": "string",
+        "description": "检索引擎 Python 脚本路径"
+      },
+      "databasePath": {
+        "type": "string",
+        "description": "SQLite 数据库路径"
+      },
+      "userId": {
+        "type": "string",
+        "description": "用户 ID",
+        "default": "default"
+      },
+      "pythonPath": {
+        "type": "string",
+        "description": "Python 解释器路径",
+        "default": "python3"
+      }
+    },
+    "additionalProperties": false
+  }
+}

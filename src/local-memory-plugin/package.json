@@ -1,0 +1,22 @@
+{
+  "name": "memos-exchange-local-memory",
+  "version": "0.1.0",
+  "description": "MemOS Exchange 本地记忆插件 - 完全本地化的 OpenClaw 记忆存储和检索",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node test/plugin.test.js"
+  },
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "memory",
+    "memos",
+    "local"
+  ],
+  "author": "TheMrxk",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
