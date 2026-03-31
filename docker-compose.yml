@@ -10,9 +10,9 @@ services:
       - "5001:5001"
     volumes:
       # 挂载数据库（数据持久化）
-      - /home/hekai/.openclaw/workspace/memos-exchange.db:/app/data/memos-exchange.db
+      - /home/hekai/.openclaw/workspace/memory-exchange.db:/app/data/memory-exchange.db
     environment:
-      - DATABASE_URL=/app/data/memos-exchange.db
+      - DATABASE_URL=/app/data/memory-exchange.db
       - FLASK_ENV=production
     restart: unless-stopped
     healthcheck:
@@ -33,5 +33,5 @@ services:
     restart: unless-stopped
 
 networks:
-  memos-network:
+  memory-network:
     driver: bridge

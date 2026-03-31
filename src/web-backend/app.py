@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MemOS Exchange - Web Backend API
+Memory Exchange - Web Backend API
 
 Flask REST API for managing conversations and memories.
 """
@@ -8,8 +8,8 @@ Flask REST API for managing conversations and memories.
 import sys
 from pathlib import Path
 
-# 添加 local-memory-plugin 目录到路径（用于导入 db.schema）
-sys.path.insert(0, str(Path(__file__).parent.parent / 'local-memory-plugin'))
+# 添加 memory-exchange-plugin 目录到路径（用于导入 db.schema）
+sys.path.insert(0, str(Path(__file__).parent.parent / 'memory-exchange-plugin'))
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -37,7 +37,7 @@ def health_check():
     return jsonify({
         'status': 'ok',
         'timestamp': datetime.now().isoformat(),
-        'service': 'MemOS Exchange API'
+        'service': 'Memory Exchange API'
     })
 
 

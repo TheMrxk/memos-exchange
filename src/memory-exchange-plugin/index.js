@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * MemOS Exchange - 本地记忆插件
+ * Memory Exchange - 本地记忆插件
  *
  * 功能:
  * - 对话前自动检索相关记忆并注入上下文
@@ -13,8 +13,8 @@
  *   "minScore": 0.3,
  *   "includeAssistant": true,
  *   "maxMessageChars": 5000,
- *   "searchEngine": "~/.openclaw/workspace/memory-engine/search_engine.py",
- *   "databasePath": "~/.openclaw/workspace/memos-exchange.db",
+ *   "searchEngine": "~/.openclaw/workspace/memory-exchange/src/memory-exchange-plugin/search_engine.py",
+ *   "databasePath": "~/.openclaw/workspace/memory-exchange.db",
  *   "userId": "default"
  * }
  */
@@ -32,8 +32,8 @@ const DEFAULT_CONFIG = {
     minScore: 0.3,
     includeAssistant: true,
     maxMessageChars: 5000,
-    searchEngine: join(homedir(), '.openclaw', 'workspace', 'memos-exchange', 'src', 'local-memory-plugin', 'search_engine.py'),
-    databasePath: join(homedir(), '.openclaw', 'workspace', 'memos-exchange.db'),
+    searchEngine: join(homedir(), '.openclaw', 'workspace', 'memory-exchange', 'src', 'memory-exchange-plugin', 'search_engine.py'),
+    databasePath: join(homedir(), '.openclaw', 'workspace', 'memory-exchange.db'),
     userId: 'default',
     pythonPath: 'python3'
 };
@@ -75,7 +75,7 @@ function searchMemories(cfg, query, limit = 6) {
         return JSON.parse(result);
     } catch (err) {
         // 搜索失败时返回空数组，不中断对话
-        console.warn('[memos-exchange] 检索失败:', err.message);
+        console.warn('[memory-exchange] 检索失败:', err.message);
         return [];
     }
 }
@@ -92,7 +92,7 @@ function saveConversation(cfg, sessionKey, userContent, assistantContent) {
             stdio: ['pipe', 'pipe', 'pipe']
         });
     } catch (err) {
-        console.warn('[memos-exchange] 保存对话失败:', err.message);
+        console.warn('[memory-exchange] 保存对话失败:', err.message);
     }
 }
 
@@ -200,8 +200,8 @@ function pickLastTurn(messages, cfg) {
 }
 
 module.exports = {
-    id: 'memos-exchange-local-memory',
-    name: 'MemOS Exchange 本地记忆',
+    id: 'memory-exchange-plugin',
+    name: 'Memory Exchange 本地记忆',
     description: '本地记忆存储和检索插件',
     kind: 'lifecycle',
 
@@ -210,11 +210,11 @@ module.exports = {
         const log = api.logger ?? console;
 
         if (!cfg.enabled) {
-            log.info('[memos-exchange] 插件已禁用');
+            log.info('[memory-exchange] 插件已禁用');
             return;
         }
 
-        log.info('[memos-exchange] 插件已注册');
+        log.info('[memory-exchange] 插件已注册');
 
         // 对话前钩子 - 检索记忆并注入
         api.on('before_agent_start', async (event, ctx) => {
@@ -241,7 +241,7 @@ module.exports = {
                     };
                 }
             } catch (err) {
-                log.warn('[memos-exchange] before_agent_start 失败:', err.message);
+                log.warn('[memory-exchange] before_agent_start 失败:', err.message);
             }
         });
 
@@ -264,7 +264,7 @@ module.exports = {
                 saveConversation(cfg, sessionKey, user, assistant);
 
             } catch (err) {
-                log.warn('[memos-exchange] agent_end 失败:', err.message);
+                log.warn('[memory-exchange] agent_end 失败:', err.message);
             }
         });
     }

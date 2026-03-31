@@ -1,6 +1,6 @@
 {
-  "id": "memos-exchange-local-memory",
-  "name": "MemOS Exchange 本地记忆",
+  "id": "memory-exchange-plugin",
+  "name": "Memory Exchange 本地记忆",
   "description": "本地记忆存储和检索插件 - 完全本地化，无需网络依赖",
   "version": "0.1.0",
   "kind": "lifecycle",

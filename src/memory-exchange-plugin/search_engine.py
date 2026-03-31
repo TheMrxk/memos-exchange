@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MemOS Exchange - 本地记忆检索引擎
+Memory Exchange - 本地记忆检索引擎
 
 功能：
 - 关键词搜索（基于 SQLite FTS5）
@@ -203,7 +203,7 @@ def format_results_human(results: List[Dict]) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='MemOS Exchange 本地记忆检索引擎')
+    parser = argparse.ArgumentParser(description='Memory Exchange 本地记忆检索引擎')
     subparsers = parser.add_subparsers(dest='command', help='命令')
 
     # search 命令

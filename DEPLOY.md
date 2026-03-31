@@ -1,11 +1,11 @@
-# MemOS Exchange - Docker 部署
+# Memory Exchange - Docker 部署
 
 ## 快速开始
 
 ### 1. 构建镜像
 
 ```bash
-cd /home/hekai/memos-exchange
+cd /home/hekai/memory-exchange
 docker-compose build
 ```
 
@@ -17,9 +17,9 @@ docker-compose up -d
 
 ### 3. 访问 Web 界面
 
-- **管理界面**: http://localhost:3000
-- **API 文档**: http://localhost:3000/docs
-- **健康检查**: http://localhost:3000/health
+- **管理界面**: http://localhost:8080
+- **API 文档**: http://localhost:5001/docs
+- **健康检查**: http://localhost:5001/health
 
 ### 4. 查看日志
 
@@ -39,12 +39,12 @@ docker-compose down
 
 数据库文件存储在宿主机：
 ```
-~/.openclaw/workspace/memos-exchange.db
+~/.openclaw/workspace/memory-exchange.db
 ```
 
 Docker 容器内路径：
 ```
-/app/data/memos-exchange.db
+/app/data/memory-exchange.db
 ```
 
 即使删除容器，数据也不会丢失。
@@ -55,7 +55,7 @@ Docker 容器内路径：
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `DATABASE_URL` | 数据库路径 | `/app/data/memos-exchange.db` |
+| `DATABASE_URL` | 数据库路径 | `/app/data/memory-exchange.db` |
 | `SECRET_KEY` | Flask 密钥 | (自动生成) |
 | `PORT` | 服务端口 | `80` |
 
@@ -65,32 +65,32 @@ Docker 容器内路径：
 
 ### 健康检查
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:5001/health
 ```
 
 ### 统计信息
 ```bash
-curl http://localhost:3000/api/stats
+curl http://localhost:5001/api/stats
 ```
 
 ### 获取对话列表
 ```bash
-curl http://localhost:3000/api/conversations
+curl http://localhost:5001/api/conversations
 ```
 
 ### 获取记忆列表
 ```bash
-curl http://localhost:3000/api/memories
+curl http://localhost:5001/api/memories
 ```
 
 ### 搜索记忆
 ```bash
-curl "http://localhost:3000/api/memories/search?q=Python"
+curl "http://localhost:5001/api/memories/search?q=Python"
 ```
 
 ### 删除记忆
 ```bash
-curl -X DELETE http://localhost:3000/api/memories/1
+curl -X DELETE http://localhost:5001/api/memories/1
 ```
 
 ---
@@ -105,7 +105,7 @@ docker-compose logs
 ### 数据库连接失败
 检查挂载的数据库文件是否存在：
 ```bash
-ls -la ~/.openclaw/workspace/memos-exchange.db
+ls -la ~/.openclaw/workspace/memory-exchange.db
 ```
 
 ### 端口被占用

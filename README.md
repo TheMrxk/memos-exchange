@@ -1,15 +1,15 @@
-# MemOS Exchange - 本地记忆管理系统
+# Memory Exchange - 本地记忆管理系统
 
 🧠 **完全本地化的 AI 记忆管理方案** - 为 OpenClaw 提供长期记忆能力
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/TheMrxk/memos-exchange)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/TheMrxk/memory-exchange)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
 
 ## 📋 项目概述
 
-MemOS Exchange 是一个完全本地化的记忆管理系统，参考 [MemOS](https://github.com/MemTensor/MemOS) 设计，为 OpenClaw AI 助手提供：
+Memory Exchange 是一个完全本地化的记忆管理系统，为 OpenClaw AI 助手提供：
 
 - ✅ **长期记忆** - 存储和检索历史对话
 - ✅ **智能检索** - 关键词全文搜索，相关性评分
@@ -35,7 +35,7 @@ MemOS Exchange 是一个完全本地化的记忆管理系统，参考 [MemOS](ht
 ┌───────────▼──────────────────────────────────▼───────────────────┐
 │                       OpenClaw Gateway                            │
 │  ┌─────────────────────────────────────────────────────────────┐ │
-│  │  local-memory-plugin (Node.js)                               │ │
+│  │  memory-exchange-plugin (Node.js)                               │ │
 │  │  - before_agent_start: 检索记忆并注入上下文                   │ │
 │  │  - agent_end: 保存对话到数据库                                │ │
 │  └─────────────────────────────────────────────────────────────┘ │
@@ -44,7 +44,7 @@ MemOS Exchange 是一个完全本地化的记忆管理系统，参考 [MemOS](ht
 ┌────────────────────────────▼─────────────────────────────────────┐
 │                    数据存储层                                      │
 │  ┌─────────────────────────────────────────────────────────────┐ │
-│  │  memos-exchange.db (SQLite)                                 │ │
+│  │  memory-exchange.db (SQLite)                                 │ │
 │  │  - conversations 表：原始对话记录                             │ │
 │  │  - memories 表：提取的记忆                                    │ │
 │  │  - sessions 表：会话元数据                                    │ │
@@ -66,7 +66,7 @@ MemOS Exchange 是一个完全本地化的记忆管理系统，参考 [MemOS](ht
 ┌─────────────────────────────────────────────────────────────────┐
 │                    数据流向示意图                                 │
 │                                                                  │
-│  用户对话 → OpenClaw → local-memory-plugin → SQLite 数据库        │
+│  用户对话 → OpenClaw → memory-exchange-plugin → SQLite 数据库        │
 │                                              ↑                   │
 │  用户浏览 ← Web 管理界面 ←─────────────────────┘                   │
 │                                                                  │
@@ -89,8 +89,8 @@ MemOS Exchange 是一个完全本地化的记忆管理系统，参考 [MemOS](ht
 #### 1. 克隆项目
 
 ```bash
-git clone https://github.com/TheMrxk/memos-exchange.git
-cd memos-exchange
+git clone https://github.com/TheMrxk/memory-exchange.git
+cd memory-exchange
 ```
 
 #### 2. 修改配置
@@ -99,7 +99,7 @@ cd memos-exchange
 
 ```yaml
 volumes:
-  - /你的路径/.openclaw/workspace/memos-exchange.db:/app/data/memos-exchange.db
+  - /你的路径/.openclaw/workspace/memory-exchange.db:/app/data/memory-exchange.db
 ```
 
 #### 3. 启动服务
@@ -148,7 +148,7 @@ docker-compose down
 #### 1. 安装 Backend API
 
 ```bash
-cd /home/hekai/memos-exchange/src/web-backend
+cd /home/hekai/memory-exchange/src/web-backend
 
 # 创建虚拟环境
 python3 -m venv venv
@@ -164,7 +164,7 @@ python app.py
 #### 2. 启动 Web 前端
 
 ```bash
-cd /home/hekai/memos-exchange/src/web-frontend
+cd /home/hekai/memory-exchange/src/web-frontend
 
 # 使用 Python 简单 HTTP 服务器
 python3 -m http.server 8080
@@ -177,16 +177,16 @@ npx serve .
 
 ```bash
 # 复制插件到 OpenClaw 扩展目录
-mkdir -p ~/.openclaw/extensions/local-memory-plugin
-cp -r /home/hekai/memos-exchange/src/local-memory-plugin/* \
-    ~/.openclaw/extensions/local-memory-plugin/
+mkdir -p ~/.openclaw/extensions/memory-exchange-plugin
+cp -r /home/hekai/memory-exchange/src/memory-exchange-plugin/* \
+    ~/.openclaw/extensions/memory-exchange-plugin/
 
 # 编辑 OpenClaw 配置，启用插件
 # ~/.openclaw/openclaw.json
 {
   "plugins": {
     "entries": {
-      "local-memory-plugin": {
+      "memory-exchange-plugin": {
         "enabled": true,
         "config": {
           "memoryLimitNumber": 6,
@@ -269,9 +269,9 @@ curl -X DELETE http://localhost:5001/api/memories/1
 ## 📁 项目结构
 
 ```
-memos-exchange/
+memory-exchange/
 ├── src/
-│   ├── local-memory-plugin/     # OpenClaw 插件
+│   ├── memory-exchange-plugin/    # OpenClaw 插件
 │   │   ├── db/
 │   │   │   └── schema.py        # 数据库 Schema
 │   │   ├── test/
@@ -298,12 +298,12 @@ memos-exchange/
 
 ### Q1: 数据存在哪里？
 
-数据库文件位于 `~/.openclaw/workspace/memos-exchange.db`（SQLite 文件）。
+数据库文件位于 `~/.openclaw/workspace/memory-exchange.db`（SQLite 文件）。
 Docker 部署时会挂载这个文件到容器内，数据不会丢失。
 
 ### Q2: OpenClaw 如何保存对话？
 
-OpenClaw 的 `local-memory-plugin` 插件监听 `agent_end` 事件，自动提取最后一轮对话并保存到数据库。
+OpenClaw 的 `memory-exchange-plugin` 插件监听 `agent_end` 事件，自动提取最后一轮对话并保存到数据库。
 
 ### Q3: Web 界面如何实时更新？
 
