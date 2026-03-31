@@ -1,282 +1,334 @@
-# MemOS Local - 本地记忆管理系统
+# MemOS Exchange - 本地记忆管理系统
 
-## 项目状态
+🧠 **完全本地化的 AI 记忆管理方案** - 为 OpenClaw 提供长期记忆能力
 
-**版本**: v1.0.0
-**开发日期**: 2026-03-26
-**状态**: 🟢 核心功能已完成
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/TheMrxk/memos-exchange)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
 
 ## 📋 项目概述
 
-MemOS Local 是一个完全本地化的记忆管理系统，作为 OpenClaw 插件运行，实现：
+MemOS Exchange 是一个完全本地化的记忆管理系统，参考 [MemOS](https://github.com/MemTensor/MemOS) 设计，为 OpenClaw AI 助手提供：
 
-- ✅ **对话前自动注入记忆** - 根据当前对话内容，智能检索相关记忆并注入上下文
-- ✅ **对话后自动保存记忆** - 自动提取对话中的关键信息并保存
-- ✅ **智能检索** - 支持关键词、相关性、日期、标签等多维度检索
-- ✅ **完全本地** - 所有数据存储在本地，无需网络依赖
+- ✅ **长期记忆** - 存储和检索历史对话
+- ✅ **智能检索** - 关键词全文搜索，相关性评分
+- ✅ **Web 管理界面** - 可视化查看和管理记忆
+- ✅ **完全本地** - 数据存储在本地 SQLite，无需云端依赖
+- ✅ **OpenClaw 集成** - 自动保存对话，自动注入记忆
+
+---
+
+## 🏗️ 系统架构
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         用户界面层                                │
+│  ┌─────────────────┐         ┌─────────────────────────────────┐│
+│  │  OpenClaw       │         │  Web 管理界面                     ││
+│  │  (Telegram/     │         │  (Vue 3 + Element Plus)          ││
+│  │   QQ/微信等)     │         │  http://localhost:8080           ││
+│  └────────┬────────┘         └──────────────┬──────────────────┘│
+│           │                                  │                   │
+└───────────┼──────────────────────────────────┼───────────────────┘
+            │                                  │
+┌───────────▼──────────────────────────────────▼───────────────────┐
+│                       OpenClaw Gateway                            │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  local-memory-plugin (Node.js)                               │ │
+│  │  - before_agent_start: 检索记忆并注入上下文                   │ │
+│  │  - agent_end: 保存对话到数据库                                │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+└────────────────────────────┬─────────────────────────────────────┘
+                             │
+┌────────────────────────────▼─────────────────────────────────────┐
+│                    数据存储层                                      │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  memos-exchange.db (SQLite)                                 │ │
+│  │  - conversations 表：原始对话记录                             │ │
+│  │  - memories 表：提取的记忆                                    │ │
+│  │  - sessions 表：会话元数据                                    │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 三个核心组件的关系
+
+| 组件 | 作用 | 与其他组件的关系 |
+|------|------|-----------------|
+| **OpenClaw** | AI 助手网关 | 通过插件调用数据库，实现记忆的自动保存和检索 |
+| **本地记忆插件** | OpenClaw 插件 | 监听对话事件，读写 SQLite 数据库 |
+| **Web 管理界面** | 用户管理界面 | 直接读取数据库，可视化展示和编辑记忆 |
+
+### 实时同步原理
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    数据流向示意图                                 │
+│                                                                  │
+│  用户对话 → OpenClaw → local-memory-plugin → SQLite 数据库        │
+│                                              ↑                   │
+│  用户浏览 ← Web 管理界面 ←─────────────────────┘                   │
+│                                                                  │
+│  【说明】                                                         │
+│  1. OpenClaw 收到用户消息后，插件自动保存对话到 SQLite              │
+│  2. Web 管理界面实时读取 SQLite 数据库，显示最新数据                 │
+│  3. 用户在 Web 界面添加/编辑/删除记忆，直接修改 SQLite              │
+│  4. OpenClaw 下次检索时，能立即看到 Web 界面的修改                   │
+│                                                                  │
+│  【关键】三个组件共享同一个 SQLite 数据库文件，实现数据同步          │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## 🚀 快速开始
 
-### 环境要求
+### 方式一：Docker 部署（推荐）
 
-- Python 3.7+
-- OpenClaw 2026.3.2+
-
-### 安装步骤
-
-#### 1. 安装检索引擎
+#### 1. 克隆项目
 
 ```bash
-# 创建目录
-mkdir -p ~/.openclaw/workspace/memory-engine
-
-# 复制检索引擎
-cp src/search-engine/search.py ~/.openclaw/workspace/memory-engine/
-chmod +x ~/.openclaw/workspace/memory-engine/search.py
+git clone https://github.com/TheMrxk/memos-exchange.git
+cd memos-exchange
 ```
 
-#### 2. 验证安装
+#### 2. 修改配置
+
+编辑 `docker-compose.yml`，修改数据库路径为你的实际路径：
+
+```yaml
+volumes:
+  - /你的路径/.openclaw/workspace/memos-exchange.db:/app/data/memos-exchange.db
+```
+
+#### 3. 启动服务
 
 ```bash
-python3 ~/.openclaw/workspace/memory-engine/search.py stats
+docker-compose up -d
+```
+
+#### 4. 访问服务
+
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| Web 管理界面 | http://localhost:8080 | 可视化管理记忆 |
+| Backend API | http://localhost:5001 | REST API |
+| Health Check | http://localhost:5001/health | 健康检查 |
+
+#### 5. 查看日志
+
+```bash
+# 查看所有服务日志
+docker-compose logs -f
+
+# 查看后端日志
+docker-compose logs -f backend
+
+# 查看前端日志
+docker-compose logs -f frontend
+```
+
+#### 6. 停止服务
+
+```bash
+docker-compose down
+```
+
+---
+
+### 方式二：本地部署（开发模式）
+
+#### 环境要求
+
+- Python 3.7+
+- Node.js 14+
+- OpenClaw 2026.3.2+
+
+#### 1. 安装 Backend API
+
+```bash
+cd /home/hekai/memos-exchange/src/web-backend
+
+# 创建虚拟环境
+python3 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 启动服务（端口 5001）
+python app.py
+```
+
+#### 2. 启动 Web 前端
+
+```bash
+cd /home/hekai/memos-exchange/src/web-frontend
+
+# 使用 Python 简单 HTTP 服务器
+python3 -m http.server 8080
+
+# 或使用 Node.js
+npx serve .
+```
+
+#### 3. 安装 OpenClaw 插件
+
+```bash
+# 复制插件到 OpenClaw 扩展目录
+mkdir -p ~/.openclaw/extensions/local-memory-plugin
+cp -r /home/hekai/memos-exchange/src/local-memory-plugin/* \
+    ~/.openclaw/extensions/local-memory-plugin/
+
+# 编辑 OpenClaw 配置，启用插件
+# ~/.openclaw/openclaw.json
+{
+  "plugins": {
+    "entries": {
+      "local-memory-plugin": {
+        "enabled": true,
+        "config": {
+          "memoryLimitNumber": 6,
+          "minScore": 0.3,
+          "includeAssistant": true
+        }
+      }
+    }
+  }
+}
+
+# 重启 OpenClaw Gateway
+openclaw gateway restart
 ```
 
 ---
 
 ## 📖 使用说明
 
-### 检索引擎命令
+### Web 管理界面功能
 
-#### 基本搜索
+#### 1. 仪表盘
+
+- 📊 统计信息（对话数、记忆数、数据库大小）
+- 📈 记忆分类统计
+- 🔗 快速链接
+
+#### 2. 记忆管理
+
+- 🔍 搜索记忆（关键词、类型过滤）
+- ➕ 添加记忆（手动创建）
+- ✏️ 编辑记忆
+- 🗑️ 删除记忆
+
+#### 3. 对话记录
+
+- 💬 查看所有历史对话
+- 📅 按时间排序
+- 🔎 按会话筛选
+
+---
+
+## 🔧 API 文档
+
+### 端点列表
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET | `/health` | 健康检查 |
+| GET | `/api/stats` | 获取统计信息 |
+| GET | `/api/conversations` | 获取对话列表 |
+| GET | `/api/conversations/:id` | 获取对话详情 |
+| GET | `/api/memories` | 获取记忆列表 |
+| GET | `/api/memories/search?q=` | 搜索记忆 |
+| POST | `/api/memories` | 创建记忆 |
+| PUT | `/api/memories/:id` | 更新记忆 |
+| DELETE | `/api/memories/:id` | 删除记忆 |
+| GET | `/api/sessions` | 获取会话列表 |
+
+### 请求示例
 
 ```bash
-# 搜索关键词
-python3 ~/.openclaw/workspace/memory-engine/search.py search "Python"
+# 获取统计信息
+curl http://localhost:5001/api/stats
 
-# 限制结果数量
-python3 ~/.openclaw/workspace/memory-engine/search.py search "Flask" --limit 10
+# 搜索记忆
+curl "http://localhost:5001/api/memories/search?q=Python"
 
-# JSON 输出（方便脚本集成）
-python3 ~/.openclaw/workspace/memory-engine/search.py search "OpenClaw" --json
-```
+# 创建记忆
+curl -X POST http://localhost:5001/api/memories \
+  -H "Content-Type: application/json" \
+  -d '{"content": "用户喜欢用 PyCharm", "memory_type": "preference", "tags": ["python", "编辑器"]}'
 
-#### 高级搜索
-
-```bash
-# 日期范围搜索
-python3 ~/.openclaw/workspace/memory-engine/search.py search "开发" \
-  --from 2026-03-01 --to 2026-03-26
-
-# 按类型过滤 (preference/skill/experience/fact)
-python3 ~/.openclaw/workspace/memory-engine/search.py search "技能" --mem-type skill
-
-# 标签过滤
-python3 ~/.openclaw/workspace/memory-engine/search.py search "技术" --tags python flask
-
-# 组合搜索
-python3 ~/.openclaw/workspace/memory-engine/search.py search "Python 开发" \
-  --limit 5 --min-score 0.2 --json
-```
-
-#### 统计信息
-
-```bash
-python3 ~/.openclaw/workspace/memory-engine/search.py stats
-```
-
-输出示例：
-```
-📊 记忆系统统计
-   记忆目录：/home/hekai/.openclaw/workspace/记忆
-   总文件数：31
-   每日记忆：27 个
-   长期记忆：✅
-   灵魂记忆：✅
-   总大小：0.14 MB
+# 删除记忆
+curl -X DELETE http://localhost:5001/api/memories/1
 ```
 
 ---
 
-## 📁 目录结构
+## 📁 项目结构
 
 ```
 memos-exchange/
-├── README.md                    # 项目说明
-├── docs/
-│   ├── PRD.md                   # 产品需求文档
-│   └── memos-architecture.md    # MemOS 架构分析
 ├── src/
-│   ├── search-engine/
-│   │   ├── search.py            # 记忆检索引擎（关键词匹配）
-│   │   └── test_search.py       # 单元测试
-│   └── local-memory-plugin/     # 🆕 本地记忆插件（SQLite + FTS5）
-│       ├── db/
-│       │   └── schema.py        # 数据库 Schema
-│       ├── test/
-│       │   └── test_plugin.py   # 单元测试
-│       ├── index.js             # OpenClaw 插件主程序
-│       ├── openclaw.plugin.json # 插件配置
-│       ├── search_engine.py     # 检索引擎
-│       └── README.md            # 插件文档
-├── api/
-│   └── README.md                # API 使用文档
-└── logs/
-    └── 2026-03-26-dev-log.md    # 开发日志
+│   ├── local-memory-plugin/     # OpenClaw 插件
+│   │   ├── db/
+│   │   │   └── schema.py        # 数据库 Schema
+│   │   ├── test/
+│   │   │   └── test_plugin.py   # 单元测试
+│   │   ├── index.js             # 插件主程序
+│   │   ├── search_engine.py     # 检索引擎
+│   │   └── README.md
+│   ├── web-backend/
+│   │   ├── app.py               # Flask API
+│   │   └── requirements.txt
+│   └── web-frontend/
+│       ├── index.html           # Vue 3 管理界面
+│       ├── Dockerfile
+│       └── nginx.conf
+├── docker-compose.yml           # Docker 部署配置
+├── Dockerfile.backend           # 后端 Docker 镜像
+├── DEPLOY.md                    # 部署指南
+└── README.md                    # 本文档
 ```
-
----
-
-## 🔧 检索引擎 API
-
-### 命令行参数
-
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `query` | 搜索关键词 | 必填 |
-| `--limit, -n` | 返回结果数量 | 6 |
-| `--json, -j` | JSON 输出 | false |
-| `--min-score` | 最低相关性分数 | 0.1 |
-| `--type` | 搜索类型 (all/daily/longterm/soul) | all |
-| `--from` | 起始日期 (YYYY-MM-DD) | - |
-| `--to` | 结束日期 (YYYY-MM-DD) | - |
-| `--tags` | 标签过滤 | - |
-| `--mem-type` | 记忆类型 (preference/skill/experience/fact) | - |
-
-### JSON 输出格式
-
-```json
-[
-  {
-    "file": "2026-03-24.md",
-    "path": "/home/user/.openclaw/workspace/记忆/2026-03-24.md",
-    "title": "Python 开发环境配置",
-    "content": "使用 PyCharm 进行 Python 开发...",
-    "tags": ["python", "开发", "环境"],
-    "date": "2026-03-24",
-    "type": "skill",
-    "score": 0.85
-  }
-]
-```
-
----
-
-## 📝 记忆文件格式
-
-记忆文件存储在 `~/.openclaw/workspace/记忆/` 目录，格式如下：
-
-```markdown
-# 2026-03-26 记忆
-
-**日期**: 2026-03-26
-**时间范围**: 2026-03-25 02:00 - 2026-03-26 02:00
-**天气**: 晴
-**心情**: 充实
-**重要程度**: ⭐⭐⭐
-
----
-
-## 🎯 今日重点
-
-### 1. OpenClaw 本地记忆插件开发
-
-**时间**: 10:00-12:00
-
-**过程**:
-- 开发记忆检索引擎
-- 创建 OpenClaw 插件骨架
-- 测试搜索功能
-
-**结果**: ✅ 检索引擎完成
-
----
-
-## 对话记录
-
-### 对话 1
-**时间**: 10:00
-**会话**: session-123
-**用户**: 我喜欢用 PyCharm 写 Python 代码
-**助手**: 好的，我记住了你的偏好
-
----
-```
-
----
-
-## 🧪 测试
-
-### 单元测试（待开发）
-
-```bash
-cd src/search-engine
-python3 -m pytest test_search.py
-```
-
-### 集成测试
-
-```bash
-# 测试搜索功能
-python3 ~/.openclaw/workspace/memory-engine/search.py search "测试" --limit 3
-
-# 测试 JSON 输出
-python3 ~/.openclaw/workspace/memory-engine/search.py search "测试" --json | jq .
-```
-
----
-
-## 📊 开发进度
-
-| 阶段 | 功能 | 状态 |
-|------|------|------|
-| **阶段 1** | 记忆检索引擎（关键词匹配） | ✅ 已完成 |
-| **阶段 2** | OpenClaw 本地记忆插件（SQLite + FTS5） | ✅ 已完成 |
-| **阶段 3** | 向量数据库 + 语义搜索 | ⏸️ 预留接口 |
 
 ---
 
 ## 🔍 常见问题
 
-### Q: 搜索结果为空？
+### Q1: 数据存在哪里？
 
-**A**: 检查以下几点：
-1. 记忆目录是否有文件：`ls ~/.openclaw/workspace/记忆/`
-2. 降低最低分数：`--min-score 0.05`
-3. 使用更简单的关键词
+数据库文件位于 `~/.openclaw/workspace/memos-exchange.db`（SQLite 文件）。
+Docker 部署时会挂载这个文件到容器内，数据不会丢失。
 
-### Q: JSON 输出解析失败？
+### Q2: OpenClaw 如何保存对话？
 
-**A**: 确保使用 `--json` 参数，并用 `jq` 验证格式：
-```bash
-python3 search.py search "测试" --json | jq .
-```
+OpenClaw 的 `local-memory-plugin` 插件监听 `agent_end` 事件，自动提取最后一轮对话并保存到数据库。
 
-### Q: 如何集成到其他应用？
+### Q3: Web 界面如何实时更新？
 
-**A**: 使用 JSON 输出模式：
-```python
-import subprocess
-import json
+Web 界面直接读取 SQLite 数据库。当 OpenClaw 保存新对话后，刷新 Web 页面即可看到最新数据。
 
-result = subprocess.run(
-    ['python3', 'search.py', 'search', '关键词', '--json'],
-    capture_output=True, text=True
-)
-memories = json.loads(result.stdout)
-```
+### Q4: 可以多个助手共享记忆吗？
+
+可以！所有对话都存储在同一个数据库中，通过 `session_id` 和 `agent_id` 区分。
+
+### Q5: 数据会上传到云端吗？
+
+不会！所有数据完全存储在本地，没有任何网络请求。
 
 ---
 
-## 📚 参考资料
+## 📊 开发计划
 
-- [MemOS 官方文档](https://memos-docs.openmem.net/)
-- [MemOS GitHub](https://github.com/MemTensor/MemOS)
-- [MemOS 论文](https://arxiv.org/abs/2507.03724)
-- [OpenClaw 文档](https://docs.openclaw.ai/)
+| 阶段 | 功能 | 状态 |
+|------|------|------|
+| 阶段 1 | 记忆检索引擎（SQLite + FTS5） | ✅ 完成 |
+| 阶段 2 | OpenClaw 插件集成 | ✅ 完成 |
+| 阶段 3 | Web Backend API | ✅ 完成 |
+| 阶段 4 | Web 管理界面 | ✅ 完成 |
+| 阶段 5 | Docker 部署 | ✅ 完成 |
+| 阶段 6 | 语义搜索（向量数据库） | ⏸️ 待开发 |
 
 ---
 
@@ -286,5 +338,5 @@ MIT License
 
 ---
 
-**最后更新**: 2026-03-26
-**维护者**: 何老师 + 开哥
+**最后更新**: 2026-04-01  
+**维护者**: TheMrxk + 何老师
