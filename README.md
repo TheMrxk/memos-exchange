@@ -111,9 +111,17 @@ memos-exchange/
 │   └── memos-architecture.md    # MemOS 架构分析
 ├── src/
 │   ├── search-engine/
-│   │   ├── search.py            # 记忆检索引擎
-│   │   └── test_search.py       # 单元测试（待开发）
-│   └── plugin/                  # OpenClaw 插件（待开发）
+│   │   ├── search.py            # 记忆检索引擎（关键词匹配）
+│   │   └── test_search.py       # 单元测试
+│   └── local-memory-plugin/     # 🆕 本地记忆插件（SQLite + FTS5）
+│       ├── db/
+│       │   └── schema.py        # 数据库 Schema
+│       ├── test/
+│       │   └── test_plugin.py   # 单元测试
+│       ├── index.js             # OpenClaw 插件主程序
+│       ├── openclaw.plugin.json # 插件配置
+│       ├── search_engine.py     # 检索引擎
+│       └── README.md            # 插件文档
 ├── api/
 │   └── README.md                # API 使用文档
 └── logs/
@@ -225,9 +233,9 @@ python3 ~/.openclaw/workspace/memory-engine/search.py search "测试" --json | j
 
 | 阶段 | 功能 | 状态 |
 |------|------|------|
-| **阶段 1** | 记忆检索引擎 | ✅ 已完成 |
-| **阶段 2** | OpenClaw 插件 | ⏸️ 暂停（API 限制） |
-| **阶段 3** | 记忆提取优化 | ⏸️ 待开发 |
+| **阶段 1** | 记忆检索引擎（关键词匹配） | ✅ 已完成 |
+| **阶段 2** | OpenClaw 本地记忆插件（SQLite + FTS5） | ✅ 已完成 |
+| **阶段 3** | 向量数据库 + 语义搜索 | ⏸️ 预留接口 |
 
 ---
 
