@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemOS Exchange - 记忆管理</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <script src="https://unpkg.com/element-plus"></script>
+    <script src="https://unpkg.com/@element-plus/icons-vue"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; }
+        .app { min-height: 100vh; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px 40px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+        .header h1 { font-size: 24px; font-weight: 600; }
+        .header p { opacity: 0.8; margin-top: 5px; }
+        .nav { display: flex; gap: 10px; margin-top: 15px; }
+        .nav button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 16px; border-radius: 6px; cursor: pointer; transition: all 0.3s; }
+        .nav button:hover, .nav button.active { background: rgba(255,255,255,0.35); }
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 24px; }
+        .stat-card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+        .stat-card .value { font-size: 32px; font-weight: 700; color: #667eea; }
+        .stat-card .label { color: #909399; margin-top: 8px; font-size: 14px; }
+        .card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 20px; }
+        .card h2 { font-size: 18px; margin-bottom: 16px; color: #303133; }
+        .search-bar { display: flex; gap: 10px; margin-bottom: 20px; }
+        .search-bar input { flex: 1; padding: 12px 16px; border: 1px solid #dcdfe6; border-radius: 8px; font-size: 14px; }
+        .search-bar button { padding: 12px 24px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+        .search-bar button:hover { background: #5568d3; }
+        .memory-item { border: 1px solid #e4e7ed; border-radius: 8px; padding: 16px; margin-bottom: 12px; transition: all 0.3s; }
+        .memory-item:hover { box-shadow: 0 4px 16px rgba(102,126,234,0.15); border-color: #667eea; }
+        .memory-item .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .memory-item .type { padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+        .type-preference { background: #fef0f0; color: #f56c6c; }
+        .type-skill { background: #f0f9ff; color: #409eff; }
+        .type-experience { background: #f7fee7; color: #84cc16; }
+        .type-fact { background: #f3f4f6; color: #6b7280; }
+        .memory-item .content { color: #606266; line-height: 1.6; }
+        .memory-item .meta { display: flex; gap: 15px; margin-top: 12px; font-size: 13px; color: #909399; }
+        .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+        .tag { background: #f3f4f6; color: #6b7280; padding: 3px 8px; border-radius: 4px; font-size: 12px; }
+        .actions { display: flex; gap: 8px; }
+        .empty { text-align: center; padding: 60px 20px; color: #909399; }
+        .loading { text-align: center; padding: 40px; color: #667eea; }
+        .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 20px; }
+        .pagination button { padding: 8px 14px; border: 1px solid #dcdfe6; background: white; border-radius: 6px; cursor: pointer; }
+        .pagination button.active { background: #667eea; color: white; border-color: #667eea; }
+        .dialog-footer { display: flex; justify-content: flex-end; gap: 10px; }
+        .type-select { display: flex; gap: 10px; margin-bottom: 16px; }
+        .type-select button { flex: 1; padding: 10px; border: 2px solid #e4e7ed; background: white; border-radius: 8px; cursor: pointer; transition: all 0.3s; }
+        .type-select button.active { border-color: #667eea; background: #667eea; color: white; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="app">
+            <header class="header">
+                <h1>🧠 MemOS Exchange</h1>
+                <p>本地记忆管理系统</p>
+                <nav class="nav">
+                    <button :class="{ active: currentPage === 'dashboard' }" @click="currentPage = 'dashboard'">📊 仪表盘</button>
+                    <button :class="{ active: currentPage === 'memories' }" @click="currentPage = 'memories'">📝 记忆管理</button>
+                    <button :class="{ active: currentPage === 'conversations' }" @click="currentPage = 'conversations'">💬 对话记录</button>
+                </nav>
+            </header>
+
+            <main class="container">
+                <!-- 仪表盘 -->
+                <div v-if="currentPage === 'dashboard'">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="value">{{ stats.total_conversations }}</div>
+                            <div class="label">对话记录</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="value">{{ stats.total_memories }}</div>
+                            <div class="label">记忆总数</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="value">{{ formatSize(stats.database_size_bytes) }}</div>
+                            <div class="label">数据库大小</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="value">{{ stats.active_sessions }}</div>
+                            <div class="label">活跃会话</div>
+                        </div>
+                    </div>
+
+                    <div class="card" v-if="Object.keys(stats.memories_by_type).length > 0">
+                        <h2>📈 记忆分类统计</h2>
+                        <div class="type-select">
+                            <button v-for="(count, type) in stats.memories_by_type" :key="type" class="active">
+                                {{ getTypeLabel(type) }}: {{ count }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h2>🔗 快速链接</h2>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button @click="currentPage = 'memories'" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">浏览记忆</button>
+                            <button @click="currentPage = 'conversations'" style="padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer;">查看对话</button>
+                            <button @click="showAddMemory = true" style="padding: 10px 20px; background: #f59e0b; color: white; border: none; border-radius: 8px; cursor: pointer;">添加记忆</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 记忆管理 -->
+                <div v-if="currentPage === 'memories'">
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h2>📝 记忆列表</h2>
+                            <button @click="showAddMemory = true" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">+ 添加记忆</button>
+                        </div>
+
+                        <div class="search-bar">
+                            <input v-model="searchQuery" @keyup.enter="searchMemories" placeholder="搜索记忆...">
+                            <button @click="searchMemories">🔍 搜索</button>
+                        </div>
+
+                        <div class="type-select" style="max-width: 400px;">
+                            <button :class="{ active: filterType === '' }" @click="filterType = ''">全部</button>
+                            <button :class="{ active: filterType === 'preference' }" @click="filterType = 'preference'">偏好</button>
+                            <button :class="{ active: filterType === 'skill' }" @click="filterType = 'skill'">技能</button>
+                            <button :class="{ active: filterType === 'experience' }" @click="filterType = 'experience'">经验</button>
+                            <button :class="{ active: filterType === 'fact' }" @click="filterType = 'fact'">事实</button>
+                        </div>
+
+                        <div v-if="loading" class="loading">加载中...</div>
+                        <div v-else-if="memories.length === 0" class="empty">暂无记忆</div>
+                        <div v-else>
+                            <div v-for="mem in memories" :key="mem.id" class="memory-item">
+                                <div class="header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                    <div>
+                                        <span class="type" :class="'type-' + mem.memory_type">{{ getTypeLabel(mem.memory_type) }}</span>
+                                        <span v-if="mem.score" style="margin-left: 10px; color: #667eea;">相关度：{{ Math.round(mem.score * 100) }}%</span>
+                                    </div>
+                                    <div class="actions">
+                                        <button @click="editMemory(mem)" style="padding: 5px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">编辑</button>
+                                        <button @click="deleteMemory(mem.id)" style="padding: 5px 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">删除</button>
+                                    </div>
+                                </div>
+                                <div class="content">{{ mem.content }}</div>
+                                <div class="meta">
+                                    <span>📅 {{ formatDate(mem.created_at) }}</span>
+                                    <span v-if="mem.tags && mem.tags.length">🏷️
+                                        <span class="tags">
+                                            <span v-for="tag in mem.tags" :key="tag" class="tag">{{ tag }}</span>
+                                        </span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-if="memories.length > 0" class="pagination">
+                            <button @click="prevPage" :disabled="page === 1">上一页</button>
+                            <span style="padding: 8px;">第 {{ page }} 页</span>
+                            <button @click="nextPage">下一页</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 对话记录 -->
+                <div v-if="currentPage === 'conversations'">
+                    <div class="card">
+                        <h2>💬 对话记录</h2>
+                        <div v-if="conversationsLoading" class="loading">加载中...</div>
+                        <div v-else-if="conversations.length === 0" class="empty">暂无对话记录</div>
+                        <div v-else>
+                            <div v-for="conv in conversations" :key="conv.id" class="memory-item">
+                                <div class="header">
+                                    <span class="type" :style="{ background: conv.role === 'user' ? '#dbeafe' : '#fef3c7', color: conv.role === 'user' ? '#1e40af' : '#92400e' }">
+                                        {{ conv.role === 'user' ? '👤 用户' : '🤖 助手' }}
+                                    </span>
+                                    <span style="color: #909399; font-size: 13px;">{{ formatDate(conv.timestamp) }}</span>
+                                </div>
+                                <div class="content" style="white-space: pre-wrap;">{{ conv.content }}</div>
+                                <div class="meta">
+                                    <span>会话：{{ conv.session_id }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- 添加/编辑记忆对话框 -->
+            <div v-if="showAddMemory || editingMemory" class="dialog-overlay" @click.self="closeDialog">
+                <div class="dialog" style="background: white; border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                    <h2 style="margin-bottom: 20px;">{{ editingMemory ? '✏️ 编辑记忆' : '➕ 添加记忆' }}</h2>
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 8px; color: #606266;">记忆类型</label>
+                        <div class="type-select">
+                            <button :class="{ active: newMemoryType === 'fact' }" @click="newMemoryType = 'fact'">事实</button>
+                            <button :class="{ active: newMemoryType === 'preference' }" @click="newMemoryType = 'preference'">偏好</button>
+                            <button :class="{ active: newMemoryType === 'skill' }" @click="newMemoryType = 'skill'">技能</button>
+                            <button :class="{ active: newMemoryType === 'experience' }" @click="newMemoryType = 'experience'">经验</button>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 8px; color: #606266;">记忆内容</label>
+                        <textarea v-model="newMemoryContent" rows="5" style="width: 100%; padding: 12px; border: 1px solid #dcdfe6; border-radius: 8px; font-size: 14px; resize: vertical;" placeholder="输入记忆内容..."></textarea>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 8px; color: #606266;">标签（用空格分隔）</label>
+                        <input v-model="newMemoryTags" style="width: 100%; padding: 12px; border: 1px solid #dcdfe6; border-radius: 8px; font-size: 14px;" placeholder="例如：python 编程 开发">
+                    </div>
+                    <div class="dialog-footer">
+                        <button @click="closeDialog" style="padding: 10px 20px; background: #f3f4f6; color: #6b7280; border: none; border-radius: 8px; cursor: pointer;">取消</button>
+                        <button @click="saveMemory" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">保存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted, computed } = Vue;
+
+        createApp({
+            setup() {
+                const API_BASE = 'http://192.168.1.150:5001';
+
+                const currentPage = ref('dashboard');
+                const stats = reactive({
+                    total_conversations: 0,
+                    total_memories: 0,
+                    database_size_bytes: 0,
+                    active_sessions: 0,
+                    memories_by_type: {}
+                });
+                const memories = ref([]);
+                const conversations = ref([]);
+                const loading = ref(false);
+                const conversationsLoading = ref(false);
+                const searchQuery = ref('');
+                const filterType = ref('');
+                const page = ref(1);
+                const showAddMemory = ref(false);
+                const editingMemory = ref(null);
+                const newMemoryContent = ref('');
+                const newMemoryType = ref('fact');
+                const newMemoryTags = ref('');
+
+                const getTypeLabel = (type) => {
+                    const labels = {
+                        'preference': '偏好',
+                        'skill': '技能',
+                        'experience': '经验',
+                        'fact': '事实'
+                    };
+                    return labels[type] || type;
+                };
+
+                const formatDate = (dateStr) => {
+                    if (!dateStr) return '-';
+                    const date = new Date(dateStr);
+                    return date.toLocaleString('zh-CN', { hour12: false });
+                };
+
+                const formatSize = (bytes) => {
+                    if (bytes < 1024) return bytes + ' B';
+                    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+                    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+                };
+
+                const loadStats = async () => {
+                    try {
+                        const res = await fetch(`${API_BASE}/api/stats`);
+                        const data = await res.json();
+                        stats.total_conversations = data.total_conversations;
+                        stats.total_memories = data.total_memories;
+                        stats.database_size_bytes = data.database_size_bytes;
+                        stats.active_sessions = data.active_sessions;
+                        stats.memories_by_type = data.memories_by_type || {};
+                    } catch (e) {
+                        console.error('加载统计失败:', e);
+                    }
+                };
+
+                const loadMemories = async () => {
+                    loading.value = true;
+                    try {
+                        let url = `${API_BASE}/api/memories?limit=50&offset=${(page.value - 1) * 50}`;
+                        if (filterType.value) {
+                            url += `&type=${filterType.value}`;
+                        }
+                        const res = await fetch(url);
+                        const data = await res.json();
+                        memories.value = data.memories || [];
+                    } catch (e) {
+                        console.error('加载记忆失败:', e);
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const searchMemories = async () => {
+                    if (!searchQuery.value) {
+                        loadMemories();
+                        return;
+                    }
+                    loading.value = true;
+                    try {
+                        let url = `${API_BASE}/api/memories/search?q=${encodeURIComponent(searchQuery.value)}&limit=50`;
+                        if (filterType.value) {
+                            url += `&type=${filterType.value}`;
+                        }
+                        const res = await fetch(url);
+                        const data = await res.json();
+                        memories.value = data.results || [];
+                    } catch (e) {
+                        console.error('搜索失败:', e);
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const loadConversations = async () => {
+                    conversationsLoading.value = true;
+                    try {
+                        const res = await fetch(`${API_BASE}/api/conversations?limit=50`);
+                        const data = await res.json();
+                        conversations.value = data.conversations || [];
+                    } catch (e) {
+                        console.error('加载对话失败:', e);
+                    } finally {
+                        conversationsLoading.value = false;
+                    }
+                };
+
+                const deleteMemory = async (id) => {
+                    if (!confirm('确定要删除这条记忆吗？')) return;
+                    try {
+                        await fetch(`${API_BASE}/api/memories/${id}`, { method: 'DELETE' });
+                        loadMemories();
+                        loadStats();
+                    } catch (e) {
+                        alert('删除失败：' + e.message);
+                    }
+                };
+
+                const editMemory = (mem) => {
+                    editingMemory.value = mem;
+                    newMemoryContent.value = mem.content;
+                    newMemoryType.value = mem.memory_type;
+                    newMemoryTags.value = Array.isArray(mem.tags) ? mem.tags.join(' ') : '';
+                };
+
+                const saveMemory = async () => {
+                    try {
+                        const tags = newMemoryTags.value.split(/\s+/).filter(t => t);
+                        const url = editingMemory.value
+                            ? `${API_BASE}/api/memories/${editingMemory.value.id}`
+                            : `${API_BASE}/api/memories`;
+                        const method = editingMemory.value ? 'PUT' : 'POST';
+
+                        await fetch(url, {
+                            method,
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                content: newMemoryContent.value,
+                                memory_type: newMemoryType.value,
+                                tags
+                            })
+                        });
+
+                        closeDialog();
+                        loadMemories();
+                        loadStats();
+                    } catch (e) {
+                        alert('保存失败：' + e.message);
+                    }
+                };
+
+                const closeDialog = () => {
+                    showAddMemory.value = false;
+                    editingMemory.value = null;
+                    newMemoryContent.value = '';
+                    newMemoryType.value = 'fact';
+                    newMemoryTags.value = '';
+                };
+
+                const prevPage = () => { if (page.value > 1) { page.value--; loadMemories(); } };
+                const nextPage = () => { page.value++; loadMemories(); };
+
+                onMounted(() => {
+                    loadStats();
+                    loadMemories();
+                    loadConversations();
+                });
+
+                return {
+                    currentPage, stats, memories, conversations, loading, conversationsLoading,
+                    searchQuery, filterType, page, showAddMemory, editingMemory,
+                    newMemoryContent, newMemoryType, newMemoryTags,
+                    getTypeLabel, formatDate, formatSize,
+                    loadStats, loadMemories, searchMemories, loadConversations,
+                    deleteMemory, editMemory, saveMemory, closeDialog, prevPage, nextPage, Math
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>
