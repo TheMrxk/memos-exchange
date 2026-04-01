@@ -149,8 +149,11 @@ class MemorySearchEngine:
         Returns:
             插入的记忆 ID
         """
+        # 清理系统注入的上下文
+        clean_content = self._clean_system_context(user_content)
+
         # 合并内容用于分析
-        full_content = user_content
+        full_content = clean_content
         if assistant_content:
             full_content += f"\n助手：{assistant_content}"
 
@@ -161,7 +164,7 @@ class MemorySearchEngine:
         tags = self.extract_tags(full_content)
 
         # 生成记忆内容（优先提取用户消息中的关键信息）
-        memory_content = user_content.strip()
+        memory_content = clean_content.strip()
 
         # 保存记忆
         memory_id = self.db.add_memory(
@@ -174,6 +177,73 @@ class MemorySearchEngine:
         )
 
         return memory_id
+
+    def _clean_system_context(self, content: str) -> str:
+        """
+        清理系统注入的上下文内容，提取用户实际消息
+
+        Args:
+            content: 原始内容
+
+        Returns:
+            清理后的内容
+        """
+        if not content:
+            return content
+
+        import re
+
+        # 移除零宽空格和其他不可见 Unicode 字符
+        content = re.sub(r'[\u200b\u200c\u200d\ufeff]', '', content)
+
+        # 使用 "user 原始 query：" 标记来定位用户实际消息
+        # 这个标记是 OpenClaw 注入的，标记后面的内容才是用户实际发送的消息
+        marker = "user 原始 query:"
+        marker_index = content.rfind(marker)
+        if marker_index != -1:
+            # 截取标记之后的内容
+            content = content[marker_index + len(marker):]
+
+        # 移除 <memories> 标签块（这是系统注入的记忆上下文）
+        content = re.sub(r'```text\s*<memories>.*?</memories>\s*```', '', content, flags=re.DOTALL)
+
+        # 移除 "Conversation info" 等系统元数据
+        content = re.sub(r'Conversation info \(untrusted metadata\):.*', '', content, flags=re.DOTALL)
+
+        # 移除 "Sender" 等系统元数据块
+        content = re.sub(r'Sender \(untrusted metadata\):.*', '', content, flags=re.DOTALL)
+
+        # 移除 "System:" 开头的执行结果行
+        content = re.sub(r'^System:\s*\[.*?\]\s*Exec completed.*$', '', content, flags=re.MULTILINE)
+
+        # 移除 "后台检查：" 等系统指令
+        content = re.sub(r'^后台检查：.*', '', content, flags=re.MULTILINE)
+
+        # 移除 "When reading" 等系统指令
+        content = re.sub(r'^When reading.*', '', content, flags=re.MULTILINE)
+
+        # 移除 "Current time:" 系统时间行
+        content = re.sub(r'^Current time:.*', '', content, flags=re.MULTILINE)
+
+        # 移除 JSON 块（可能是系统元数据）
+        content = re.sub(r'```json\s*\{[^}]*\}\s*```', '', content, flags=re.DOTALL)
+
+        # 移除空的 Markdown 代码块
+        content = re.sub(r'```\s*```', '', content)
+
+        # 移除表格行（Markdown 表格）
+        content = re.sub(r'^\|\s*.*\s*\|\s*$', '', content, flags=re.MULTILINE)
+
+        # 移除表格分隔行
+        content = re.sub(r'^\|\s*[-:|]+\s*\|\s*$', '', content, flags=re.MULTILINE)
+
+        # 清理开头和结尾的空白字符
+        content = content.strip()
+
+        # 清理多余空白
+        content = re.sub(r'\n\s*\n\s*\n', '\n\n', content)
+
+        return content
 
     def get_stats(self) -> Dict:
         """获取统计信息"""
@@ -225,6 +295,13 @@ def main():
     add_parser.add_argument('--type', '-t', choices=['preference', 'skill', 'experience', 'fact'], required=True)
     add_parser.add_argument('--tags', type=str, nargs='+', help='标签')
 
+    # add-memory 命令 - 从对话自动生成记忆
+    add_memory_parser = subparsers.add_parser('add-memory', help='从对话自动生成记忆')
+    add_memory_parser.add_argument('user_content', type=str, help='用户消息内容')
+    add_memory_parser.add_argument('assistant_content', type=str, nargs='?', default='', help='助手回复内容')
+    add_memory_parser.add_argument('--conversation-id', type=int, default=None, help='对话 ID')
+    add_memory_parser.add_argument('--user-id', type=str, default='default', help='用户 ID')
+
     args = parser.parse_args()
 
     engine = MemorySearchEngine()
@@ -268,6 +345,15 @@ def main():
             tags=args.tags
         )
         print(f"✅ 记忆已添加，ID: {memory_id}")
+
+    elif args.command == 'add-memory':
+        memory_id = engine.add_memory_from_conversation(
+            user_content=args.user_content,
+            assistant_content=args.assistant_content or '',
+            conversation_id=args.conversation_id,
+            user_id=args.user_id
+        )
+        print(f"✅ 记忆已生成，ID: {memory_id}")
 
     else:
         parser.print_help()

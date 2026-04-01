@@ -339,7 +339,7 @@ class DatabaseManager:
     def search_memories(self, query: str, user_id: str = 'default',
                         limit: int = 10, min_score: float = 0.1) -> list:
         """
-        全文搜索记忆（使用 FTS5）
+        全文搜索记忆（使用 FTS5，失败时回退到 LIKE 模糊匹配）
 
         Args:
             query: 搜索关键词
@@ -350,25 +350,39 @@ class DatabaseManager:
         Returns:
             搜索结果列表（按相关性排序）
         """
-        # FTS5 搜索，使用 bm25 算法计算相关性分数
+        # 首先尝试 FTS5 搜索
         cursor = self.conn.execute("""
-            SELECT m.*, bm25(memories_fts) as score
+            SELECT m.*, bm25(memories_fts) as raw_score
             FROM memories_fts
             JOIN memories m ON m.id = memories_fts.rowid
             WHERE m.user_id = ? AND memories_fts MATCH ?
-            ORDER BY score ASC
+            ORDER BY raw_score ASC
             LIMIT ?
         """, (user_id, query, limit))
 
         results = []
         for row in cursor.fetchall():
             row_dict = dict(row)
-            # 归一化分数到 0-1 范围
-            raw_score = row_dict.get('score', 0)
-            # bm25 分数越低越相关，取反并归一化
+            raw_score = row_dict.get('raw_score', 0)
             normalized_score = max(0, 1.0 + raw_score / 10.0)
             if normalized_score >= min_score:
                 row_dict['score'] = round(normalized_score, 3)
+                results.append(row_dict)
+
+        # 如果 FTS5 没有结果，回退到 LIKE 模糊匹配（支持中文）
+        if not results:
+            cursor = self.conn.execute("""
+                SELECT m.*, 0.5 as score
+                FROM memories m
+                WHERE m.user_id = ?
+                  AND (m.content LIKE ? OR m.tags LIKE ? OR m.category LIKE ?)
+                ORDER BY m.created_at DESC
+                LIMIT ?
+            """, (user_id, f'%{query}%', f'%{query}%', f'%{query}%', limit))
+
+            for row in cursor.fetchall():
+                row_dict = dict(row)
+                row_dict['score'] = 0.5  # 模糊匹配的固定分数
                 results.append(row_dict)
 
         return results
