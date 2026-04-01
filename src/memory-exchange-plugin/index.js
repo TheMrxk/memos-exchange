@@ -32,8 +32,8 @@ const DEFAULT_CONFIG = {
     minScore: 0.3,
     includeAssistant: true,
     maxMessageChars: 5000,
-    searchEngine: join(homedir(), '.openclaw', 'workspace', 'memory-exchange', 'src', 'memory-exchange-plugin', 'search_engine.py'),
-    databasePath: join(homedir(), '.openclaw', 'workspace', 'memory-exchange.db'),
+    searchEngine: join(homedir(), '.openclaw', 'extensions', 'memory-exchange-plugin', 'search_engine.py'),
+    databasePath: join(homedir(), '.openclaw', 'workspace', 'memory-exchange.db', 'memory-exchange.db'),
     userId: 'default',
     pythonPath: 'python3'
 };
@@ -85,12 +85,23 @@ function searchMemories(cfg, query, limit = 6) {
  */
 function saveConversation(cfg, sessionKey, userContent, assistantContent) {
     try {
-        const cmd = `${cfg.pythonPath} "${cfg.searchEngine}" add --type preference "${userContent}"`;
-        execSync(cmd, {
+        // 保存对话记录到数据库 (直接调用 Python 脚本)
+        const saveCmd = `${cfg.pythonPath} -c "
+import sys
+sys.path.insert(0, '${cfg.searchEngine.replace('/search_engine.py', '')}')
+from db.schema import get_database
+db = get_database('${cfg.databasePath}')
+conv_id = db.add_conversation('${sessionKey}', 'user', '''${userContent.replace(/'/g, "\\'")}''')
+${assistantContent ? `db.add_conversation('${sessionKey}', 'assistant', '''${assistantContent.replace(/'/g, "\\'")}''')` : ''}
+db.close()
+print(conv_id)
+" 2>&1`;
+        const convId = execSync(saveCmd, {
             encoding: 'utf8',
             timeout: 5000,
             stdio: ['pipe', 'pipe', 'pipe']
-        });
+        }).trim();
+        console.log('[memory-exchange] 对话已保存，ID:', convId);
     } catch (err) {
         console.warn('[memory-exchange] 保存对话失败:', err.message);
     }
