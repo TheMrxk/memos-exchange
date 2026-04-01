@@ -84,6 +84,17 @@ CREATE TABLE IF NOT EXISTS sessions (
     is_active       BOOLEAN DEFAULT 1
 );
 
+-- API 调用统计表
+CREATE TABLE IF NOT EXISTS api_stats (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    endpoint        TEXT NOT NULL,            -- API 端点
+    method          TEXT DEFAULT 'GET',       -- HTTP 方法
+    source          TEXT DEFAULT 'unknown',   -- 调用来源 (plugin/web/unknown)
+    status_code     INTEGER DEFAULT 200,      -- 响应状态码
+    response_time_ms INTEGER,                 -- 响应时间 (毫秒)
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_conversations_session ON conversations(session_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_timestamp ON conversations(timestamp DESC);
@@ -129,7 +140,7 @@ END;
 
 # 默认配置
 DEFAULT_CONFIG = {
-    'database_path': '~/.openclaw/workspace/memos-exchange.db',
+    'database_path': '~/.openclaw/workspace/memory-exchange.db/memory-exchange.db',
     'backup_enabled': True,
     'backup_interval_hours': 24,
     'max_memory_age_days': 365,
@@ -145,12 +156,12 @@ class DatabaseManager:
         初始化数据库连接
 
         Args:
-            db_path: 数据库文件路径，默认 ~/.openclaw/workspace/memos-exchange.db
+            db_path: 数据库文件路径，默认 ~/.openclaw/workspace/memory-exchange.db/memory-exchange.db
         """
         if db_path:
             self.db_path = Path(db_path).expanduser()
         else:
-            self.db_path = Path.home() / '.openclaw' / 'workspace' / 'memos-exchange.db'
+            self.db_path = Path.home() / '.openclaw' / 'workspace' / 'memory-exchange.db' / 'memory-exchange.db'
 
         # 确保目录存在
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -411,6 +422,68 @@ class DatabaseManager:
         """执行数据库整理"""
         self.conn.execute("VACUUM")
         self.conn.commit()
+
+    # ==================== API 统计 ====================
+
+    def record_api_call(self, endpoint: str, method: str = 'GET',
+                        source: str = 'unknown', status_code: int = 200,
+                        response_time_ms: int = None):
+        """记录 API 调用"""
+        self.conn.execute("""
+            INSERT INTO api_stats (endpoint, method, source, status_code, response_time_ms)
+            VALUES (?, ?, ?, ?, ?)
+        """, (endpoint, method, source, status_code, response_time_ms))
+        self.conn.commit()
+
+    def get_api_stats(self, hours: int = 24) -> dict:
+        """获取 API 调用统计"""
+        stats = {}
+
+        # 总调用次数
+        cursor = self.conn.execute("""
+            SELECT COUNT(*) as count FROM api_stats
+            WHERE created_at >= datetime('now', '-{} hours')
+        """.format(hours))
+        stats['total_calls'] = cursor.fetchone()['count']
+
+        # 按端点统计
+        cursor = self.conn.execute("""
+            SELECT endpoint, COUNT(*) as count
+            FROM api_stats
+            WHERE created_at >= datetime('now', '-{} hours')
+            GROUP BY endpoint
+            ORDER BY count DESC
+        """.format(hours))
+        stats['calls_by_endpoint'] = {row['endpoint']: row['count'] for row in cursor.fetchall()}
+
+        # 按来源统计
+        cursor = self.conn.execute("""
+            SELECT source, COUNT(*) as count
+            FROM api_stats
+            WHERE created_at >= datetime('now', '-{} hours')
+            GROUP BY source
+        """.format(hours))
+        stats['calls_by_source'] = {row['source']: row['count'] for row in cursor.fetchall()}
+
+        # 平均响应时间
+        cursor = self.conn.execute("""
+            SELECT AVG(response_time_ms) as avg_time
+            FROM api_stats
+            WHERE response_time_ms IS NOT NULL
+            AND created_at >= datetime('now', '-{} hours')
+        """.format(hours))
+        result = cursor.fetchone()
+        stats['avg_response_time_ms'] = round(result['avg_time'], 2) if result['avg_time'] else 0
+
+        # 错误次数
+        cursor = self.conn.execute("""
+            SELECT COUNT(*) as count FROM api_stats
+            WHERE status_code >= 400
+            AND created_at >= datetime('now', '-{} hours')
+        """.format(hours))
+        stats['error_count'] = cursor.fetchone()['count']
+
+        return stats
 
 
 # 单例模式

@@ -51,6 +51,9 @@
         .type-select { display: flex; gap: 10px; margin-bottom: 16px; }
         .type-select button { flex: 1; padding: 10px; border: 2px solid #e4e7ed; background: white; border-radius: 8px; cursor: pointer; transition: all 0.3s; }
         .type-select button.active { border-color: #667eea; background: #667eea; color: white; }
+        .status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 500; }
+        .status-online { background: #d1fae5; color: #065f46; }
+        .status-offline { background: #fee2e2; color: #991b1b; }
     </style>
 </head>
 <body>
@@ -69,31 +72,85 @@
             <main class="container">
                 <!-- 仪表盘 -->
                 <div v-if="currentPage === 'dashboard'">
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="value">{{ stats.total_conversations }}</div>
-                            <div class="label">对话记录</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="value">{{ stats.total_memories }}</div>
-                            <div class="label">记忆总数</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="value">{{ formatSize(stats.database_size_bytes) }}</div>
-                            <div class="label">数据库大小</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="value">{{ stats.active_sessions }}</div>
-                            <div class="label">活跃会话</div>
+                    <!-- OpenClaw 连接状态 -->
+                    <div class="card" style="border-left: 4px solid #667eea;">
+                        <h2 style="display: flex; align-items: center; gap: 10px;">
+                            🔌 OpenClaw 连接状态
+                            <span :class="['status-badge', apiConnected ? 'status-online' : 'status-offline']">
+                                {{ apiConnected ? '● 已连接' : '● 离线' }}
+                            </span>
+                        </h2>
+                        <div style="margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
+                            <div style="padding: 12px; background: #f8fafc; border-radius: 8px;">
+                                <div style="font-size: 12px; color: #64748b;">API 地址</div>
+                                <div style="font-size: 14px; font-weight: 500; color: #334155; margin-top: 4px;">{{ API_BASE }}</div>
+                            </div>
+                            <div style="padding: 12px; background: #f8fafc; border-radius: 8px;">
+                                <div style="font-size: 12px; color: #64748b;">最后检查</div>
+                                <div style="font-size: 14px; font-weight: 500; color: #334155; margin-top: 4px;">{{ lastCheckTime }}</div>
+                            </div>
+                            <div style="padding: 12px; background: #f8fafc; border-radius: 8px;">
+                                <div style="font-size: 12px; color: #64748b;">响应时间</div>
+                                <div style="font-size: 14px; font-weight: 500; color: #334155; margin-top: 4px;">{{ responseTime }}ms</div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="card" v-if="Object.keys(stats.memories_by_type).length > 0">
-                        <h2>📈 记忆分类统计</h2>
-                        <div class="type-select">
-                            <button v-for="(count, type) in stats.memories_by_type" :key="type" class="active">
-                                {{ getTypeLabel(type) }}: {{ count }}
-                            </button>
+                    <!-- API 调用统计 -->
+                    <div class="card" style="border-left: 4px solid #10b981;">
+                        <h2 style="display: flex; align-items: center; gap: 10px;">
+                            📊 API 调用统计 ({{ timeRange }})
+                        </h2>
+                        <div class="stats-grid" style="margin-top: 16px;">
+                            <div class="stat-card">
+                                <div class="value" style="font-size: 24px;">{{ apiStats.total_calls || 0 }}</div>
+                                <div class="label">调用次数</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value" style="font-size: 24px;">{{ apiStats.avg_response_time_ms || 0 }}ms</div>
+                                <div class="label">平均响应时间</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value" style="font-size: 24px; color: #ef4444;">{{ apiStats.error_count || 0 }}</div>
+                                <div class="label">错误次数</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value" style="font-size: 24px; color: #10b981;">{{ (apiStats.calls_by_source || {}).web || 0 }}</div>
+                                <div class="label">Web 访问</div>
+                            </div>
+                        </div>
+                        <!-- 按端点统计 -->
+                        <div v-if="Object.keys(apiStats.calls_by_endpoint || {}).length > 0" style="margin-top: 16px;">
+                            <h3 style="font-size: 14px; color: #64748b; margin-bottom: 8px;">热门端点</h3>
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                <span v-for="(count, endpoint) in apiStats.calls_by_endpoint" :key="endpoint"
+                                      style="padding: 6px 12px; background: #f1f5f9; border-radius: 6px; font-size: 13px;">
+                                    {{ endpoint }}: {{ count }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 数据库统计 -->
+                    <div class="card" style="border-left: 4px solid #8b5cf6;">
+                        <h2>📈 数据库统计</h2>
+                        <div class="stats-grid" style="margin-top: 16px;">
+                            <div class="stat-card">
+                                <div class="value">{{ stats.total_conversations }}</div>
+                                <div class="label">对话记录</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value">{{ stats.total_memories }}</div>
+                                <div class="label">记忆总数</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value">{{ formatSize(stats.database_size_bytes) }}</div>
+                                <div class="label">数据库大小</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value">{{ stats.active_sessions }}</div>
+                                <div class="label">活跃会话</div>
+                            </div>
                         </div>
                     </div>
 
@@ -217,11 +274,11 @@
     </div>
 
     <script>
-        const { createApp, ref, reactive, onMounted, computed } = Vue;
+        const { createApp, ref, reactive, onMounted, computed, onUnmounted } = Vue;
 
         createApp({
             setup() {
-                const API_BASE = 'http://192.168.1.150:5001';
+                const API_BASE = 'http://localhost:5001';
 
                 const currentPage = ref('dashboard');
                 const stats = reactive({
@@ -231,6 +288,18 @@
                     active_sessions: 0,
                     memories_by_type: {}
                 });
+                const apiStats = reactive({
+                    total_calls: 0,
+                    avg_response_time_ms: 0,
+                    error_count: 0,
+                    calls_by_endpoint: {},
+                    calls_by_source: {}
+                });
+                const apiConnected = ref(true);
+                const lastCheckTime = ref('-');
+                const responseTime = ref(0);
+                const timeRange = ref('24 小时');
+
                 const memories = ref([]);
                 const conversations = ref([]);
                 const loading = ref(false);
@@ -243,6 +312,22 @@
                 const newMemoryContent = ref('');
                 const newMemoryType = ref('fact');
                 const newMemoryTags = ref('');
+
+                // 检查 API 连接状态
+                const checkApiHealth = async () => {
+                    const startTime = Date.now();
+                    try {
+                        const res = await fetch(`${API_BASE}/health`);
+                        const data = await res.json();
+                        apiConnected.value = true;
+                        responseTime.value = Date.now() - startTime;
+                        lastCheckTime.value = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+                    } catch (e) {
+                        apiConnected.value = false;
+                        responseTime.value = 0;
+                        lastCheckTime.value = '失败';
+                    }
+                };
 
                 const getTypeLabel = (type) => {
                     const labels = {
@@ -275,8 +360,31 @@
                         stats.database_size_bytes = data.database_size_bytes;
                         stats.active_sessions = data.active_sessions;
                         stats.memories_by_type = data.memories_by_type || {};
+
+                        // 加载 API 统计
+                        if (data.api_stats) {
+                            apiStats.total_calls = data.api_stats.total_calls || 0;
+                            apiStats.avg_response_time_ms = data.api_stats.avg_response_time_ms || 0;
+                            apiStats.error_count = data.api_stats.error_count || 0;
+                            apiStats.calls_by_endpoint = data.api_stats.calls_by_endpoint || {};
+                            apiStats.calls_by_source = data.api_stats.calls_by_source || {};
+                        }
                     } catch (e) {
                         console.error('加载统计失败:', e);
+                    }
+                };
+
+                const loadApiStats = async () => {
+                    try {
+                        const res = await fetch(`${API_BASE}/api/api-stats?hours=24`);
+                        const data = await res.json();
+                        apiStats.total_calls = data.total_calls || 0;
+                        apiStats.avg_response_time_ms = data.avg_response_time_ms || 0;
+                        apiStats.error_count = data.error_count || 0;
+                        apiStats.calls_by_endpoint = data.calls_by_endpoint || {};
+                        apiStats.calls_by_source = data.calls_by_source || {};
+                    } catch (e) {
+                        console.error('加载 API 统计失败:', e);
                     }
                 };
 
@@ -386,18 +494,38 @@
                 const prevPage = () => { if (page.value > 1) { page.value--; loadMemories(); } };
                 const nextPage = () => { page.value++; loadMemories(); };
 
+                let healthCheckInterval = null;
+
                 onMounted(() => {
                     loadStats();
+                    loadApiStats();
                     loadMemories();
                     loadConversations();
+                    checkApiHealth();
+
+                    // 每 30 秒检查一次 API 健康
+                    healthCheckInterval = setInterval(checkApiHealth, 30000);
+
+                    // 每 60 秒刷新一次统计
+                    const statsInterval = setInterval(() => {
+                        loadStats();
+                        loadApiStats();
+                    }, 60000);
+
+                    // 清理定时器
+                    onUnmounted(() => {
+                        if (healthCheckInterval) clearInterval(healthCheckInterval);
+                        if (statsInterval) clearInterval(statsInterval);
+                    });
                 });
 
                 return {
-                    currentPage, stats, memories, conversations, loading, conversationsLoading,
+                    currentPage, stats, apiStats, memories, conversations, loading, conversationsLoading,
                     searchQuery, filterType, page, showAddMemory, editingMemory,
                     newMemoryContent, newMemoryType, newMemoryTags,
+                    apiConnected, lastCheckTime, responseTime, timeRange,
                     getTypeLabel, formatDate, formatSize,
-                    loadStats, loadMemories, searchMemories, loadConversations,
+                    loadStats, loadApiStats, loadMemories, searchMemories, loadConversations, checkApiHealth,
                     deleteMemory, editMemory, saveMemory, closeDialog, prevPage, nextPage, Math
                 };
             }

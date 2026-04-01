@@ -10,7 +10,7 @@ services:
       - "5001:5001"
     volumes:
       # 挂载数据库（数据持久化）
-      - /home/hekai/.openclaw/workspace/memory-exchange.db:/app/data/memory-exchange.db
+      - /home/hekai/.openclaw/workspace/memory-exchange.db:/app/data
     environment:
       - DATABASE_URL=/app/data/memory-exchange.db
       - FLASK_ENV=production

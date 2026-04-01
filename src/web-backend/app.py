@@ -15,6 +15,8 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from db.schema import get_database, DatabaseManager
 import json
+import time
+import os
 from datetime import datetime
 
 app = Flask(__name__)
@@ -26,7 +28,54 @@ db = None
 
 def init_db():
     global db
-    db = get_database()
+    # 使用环境变量中的数据库路径，或者使用默认路径
+    db_path = os.environ.get('DATABASE_URL', '/app/data/memory-exchange.db')
+    db = get_database(db_path)
+
+
+# ==================== API 调用统计中间件 ====================
+
+@app.before_request
+def before_request():
+    """记录请求开始时间"""
+    request.start_time = time.time()
+
+
+@app.after_request
+def after_request(response):
+    """记录 API 调用"""
+    if hasattr(request, 'start_time'):
+        response_time_ms = int((time.time() - request.start_time) * 1000)
+
+        # 判断调用来源
+        source = 'unknown'
+        user_agent = request.headers.get('User-Agent', '').lower()
+        referer = request.headers.get('Referer', '').lower()
+
+        if 'vue' in user_agent or 'axios' in user_agent:
+            source = 'web'
+        elif 'python' in user_agent or 'requests' in user_agent:
+            source = 'python'
+        elif 'node' in user_agent or 'fetch' in user_agent:
+            source = 'plugin'
+        elif referer:
+            if 'localhost:8080' in referer or '192.168' in referer:
+                source = 'web'
+
+        # 记录调用（非健康检查端点）
+        if request.path != '/health':
+            try:
+                db.record_api_call(
+                    endpoint=request.path,
+                    method=request.method,
+                    source=source,
+                    status_code=response.status_code,
+                    response_time_ms=response_time_ms
+                )
+            except Exception as e:
+                print(f"记录 API 调用失败：{e}")
+
+    return response
 
 
 # ==================== 健康检查 ====================
@@ -47,7 +96,23 @@ def health_check():
 def get_stats():
     """获取统计信息"""
     stats = db.get_stats()
+
+    # 添加 API 调用统计
+    hours = request.args.get('hours', 24, type=int)
+    api_stats = db.get_api_stats(hours)
+    stats['api_stats'] = api_stats
+
     return jsonify(stats)
+
+
+# ==================== API 统计 ====================
+
+@app.route('/api/api-stats', methods=['GET'])
+def get_api_stats():
+    """获取 API 调用统计"""
+    hours = request.args.get('hours', 24, type=int)
+    api_stats = db.get_api_stats(hours)
+    return jsonify(api_stats)
 
 
 # ==================== 对话管理 ====================
