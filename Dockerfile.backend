@@ -9,7 +9,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制后端代码
 COPY src/web-backend/ ./
+
+# 复制 db 模块（用于导入 db.schema）
 COPY src/memory-exchange-plugin/db/ ./db/
+
+# 复制 memory-exchange-plugin 模块（用于导入 llm_summarizer）
+COPY src/memory-exchange-plugin/ ./memory-exchange-plugin/
 
 # 创建数据目录
 RUN mkdir -p /app/data

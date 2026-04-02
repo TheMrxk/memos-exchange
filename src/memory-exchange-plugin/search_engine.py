@@ -130,6 +130,117 @@ class MemorySearchEngine:
         # 限制结果数量
         return results[:limit]
 
+    def summarize_memory(self, user_content: str, assistant_content: str = None) -> str:
+        """
+        从对话中生成记忆摘要
+
+        策略：
+        1. 优先使用大模型生成摘要（如果配置了 API）
+        2. 大模型失败时，降级使用规则引擎
+
+        Args:
+            user_content: 用户消息内容
+            assistant_content: 助手回复内容（可选）
+
+        Returns:
+            摘要后的记忆内容
+        """
+        if not user_content:
+            return ""
+
+        # 尝试使用大模型生成摘要
+        try:
+            from llm_summarizer import LLMSummarizer
+            summarizer = LLMSummarizer()
+            llm_result = summarizer.summarize(user_content, assistant_content)
+            if llm_result:
+                # LLM 返回的格式："[type] 内容 (置信度：x.x)" 或多行
+                # 提取第一条记忆的内容部分（去掉类型和置信度标记）
+                lines = llm_result.strip().split('\n')
+                if lines:
+                    # 从第一行提取内容：[type] 内容 (置信度：x.x) -> 内容
+                    first_line = lines[0]
+                    # 尝试去掉类型标记
+                    if first_line.startswith('['):
+                        bracket_end = first_line.find(']')
+                        if bracket_end > 0:
+                            content = first_line[bracket_end + 1:].strip()
+                            # 去掉置信度标记
+                            conf_start = content.rfind(' (置信度：')
+                            if conf_start > 0:
+                                content = content[:conf_start].strip()
+                            return content
+                    return first_line
+        except Exception as e:
+            print(f"[SearchEngine] 大模型摘要失败：{e}，降级使用规则引擎")
+
+        # 大模型不可用时，使用规则引擎
+        clean_user = self._clean_system_context(user_content)
+        if not clean_user:
+            return ""
+
+        summary = self._extract_key_information(clean_user, assistant_content)
+        return summary if summary else clean_user.strip()
+
+    def _extract_key_information(self, user_content: str, assistant_content: str = None) -> str:
+        """
+        从对话中提取关键信息生成记忆
+
+        策略：
+        1. 识别用户表达的事实、偏好、技能、经历
+        2. 去除情绪性表达和冗余信息
+        3. 提取可复用的知识点
+        """
+        content = user_content.strip()
+
+        # 定义关键词模式和对应的提取规则
+        patterns = [
+            # 偏好模式：喜欢、爱吃、常用...
+            (r'[喜欢爱用常用爱吃爱喝爱玩]+(.{1,50}?)$',
+             lambda m: f"用户偏好：{m.group(1).strip()}"),
+
+            # 情绪 + 行为模式：心情不好时想吃...
+            (r'([心情情绪不好开心难过]) 时 [想会需要].{1,30}',
+             lambda m: f"用户习惯：当{m.group(1)}时会寻求相关行为"),
+
+            # 技能模式：我会、我懂、我能...
+            (r'[我会我能我可以我懂我掌握].{1,40}',
+             lambda m: f"用户技能：{m.group(0)}"),
+
+            # 事实模式：我是、我在、我有...
+            (r'[我是我在我有我家].{1,40}',
+             lambda m: f"用户事实：{m.group(0)}"),
+
+            # 项目/经历模式：今天做了、完成了、开发了...
+            (r'(今天 | 昨天 | 最近 | 刚).{1,50}?[完成开发做写弄]了',
+             lambda m: f"用户经历：{m.group(0)}"),
+        ]
+
+        import re
+
+        for pattern, formatter in patterns:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                result = formatter(match)
+                # 如果提取的结果过长，截断
+                if len(result) > 200:
+                    result = result[:197] + "..."
+                return result
+
+        # 如果没有匹配到模式，检查内容是否简短（<50 字），直接返回
+        if len(content) <= 50:
+            return content
+
+        # 内容较长时，尝试提取第一句有意义的话
+        sentences = re.split(r'[。！？!?；;]', content)
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) >= 5 and len(sentence) <= 100:
+                return sentence
+
+        # 默认返回清理后的内容
+        return content[:150] if len(content) > 150 else content
+
     def add_memory_from_conversation(
         self,
         user_content: str,
@@ -149,11 +260,14 @@ class MemorySearchEngine:
         Returns:
             插入的记忆 ID
         """
-        # 清理系统注入的上下文
-        clean_content = self._clean_system_context(user_content)
+        # 生成记忆摘要（核心功能：从对话中提取关键信息）
+        memory_content = self.summarize_memory(user_content, assistant_content)
 
-        # 合并内容用于分析
-        full_content = clean_content
+        if not memory_content:
+            return -1
+
+        # 合并内容用于分析（分类和标签）
+        full_content = user_content
         if assistant_content:
             full_content += f"\n助手：{assistant_content}"
 
@@ -162,9 +276,6 @@ class MemorySearchEngine:
 
         # 提取标签
         tags = self.extract_tags(full_content)
-
-        # 生成记忆内容（优先提取用户消息中的关键信息）
-        memory_content = clean_content.strip()
 
         # 保存记忆
         memory_id = self.db.add_memory(

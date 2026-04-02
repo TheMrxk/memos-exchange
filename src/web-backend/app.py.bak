@@ -448,8 +448,7 @@ def test_llm_connection():
 
     # 调用测试
     try:
-        # 在容器中，llm_summarizer 位于 /app/memory-exchange-plugin/
-        sys.path.insert(0, str(Path(__file__).parent / 'memory-exchange-plugin'))
+        sys.path.insert(0, str(Path(__file__).parent.parent / 'memory-exchange-plugin'))
         from llm_summarizer import LLMSummarizer
 
         summarizer = LLMSummarizer(config)

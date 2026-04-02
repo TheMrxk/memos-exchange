@@ -219,10 +219,14 @@ class DatabaseManager:
         Returns:
             插入的对话 ID
         """
+        # 使用本地时间而不是 UTC 时间
+        from datetime import datetime
+        local_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
         cursor = self.conn.execute("""
-            INSERT INTO conversations (session_id, message_id, role, content, agent_id)
-            VALUES (?, ?, ?, ?, ?)
-        """, (session_id, message_id, role, content, agent_id))
+            INSERT INTO conversations (session_id, message_id, role, content, agent_id, timestamp, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (session_id, message_id, role, content, agent_id, local_timestamp, local_timestamp))
 
         # 更新会话活跃度
         self._update_session_activity(session_id, agent_id)
@@ -261,6 +265,9 @@ class DatabaseManager:
 
     def _update_session_activity(self, session_id: str, agent_id: str = None):
         """更新会话活动记录"""
+        from datetime import datetime
+        local_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
         self.conn.execute("""
             INSERT OR IGNORE INTO sessions (session_id, agent_id)
             VALUES (?, ?)
@@ -268,11 +275,11 @@ class DatabaseManager:
 
         self.conn.execute("""
             UPDATE sessions SET
-                last_activity = CURRENT_TIMESTAMP,
+                last_activity = ?,
                 message_count = message_count + 1,
                 is_active = 1
             WHERE session_id = ?
-        """, (session_id,))
+        """, (local_timestamp, session_id))
         self.conn.commit()
 
     # ==================== 记忆操作 ====================
@@ -295,12 +302,14 @@ class DatabaseManager:
             插入的记忆 ID
         """
         import json
+        from datetime import datetime
         tags_json = json.dumps(tags) if tags else None
+        local_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         cursor = self.conn.execute("""
-            INSERT INTO memories (content, memory_type, conversation_id, tags, user_id, confidence)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (content, memory_type, conversation_id, tags_json, user_id, confidence))
+            INSERT INTO memories (content, memory_type, conversation_id, tags, user_id, confidence, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (content, memory_type, conversation_id, tags_json, user_id, confidence, local_timestamp, local_timestamp))
 
         self.conn.commit()
         return cursor.lastrowid
@@ -389,12 +398,15 @@ class DatabaseManager:
 
     def update_memory_access(self, memory_id: int):
         """更新记忆访问记录"""
+        from datetime import datetime
+        local_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
         self.conn.execute("""
             UPDATE memories SET
                 access_count = access_count + 1,
-                last_accessed = CURRENT_TIMESTAMP
+                last_accessed = ?
             WHERE id = ?
-        """, (memory_id,))
+        """, (local_timestamp, memory_id))
         self.conn.commit()
 
     # ==================== 统计信息 ====================
