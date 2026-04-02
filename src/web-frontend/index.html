@@ -84,7 +84,7 @@
                 <p>本地记忆管理系统</p>
                 <nav class="nav">
                     <button :class="{ active: currentPage === 'dashboard' }" @click="currentPage = 'dashboard'">📊 仪表盘</button>
-                    <button :class="{ active: currentPage === 'memories' }" @click="currentPage = 'memories'">📝 记忆管理</button>
+                    <button :class="{ active: currentPage === 'memories' }" @click="switchToMemories">📝 记忆管理</button>
                     <button :class="{ active: currentPage === 'conversations' }" @click="currentPage = 'conversations'">💬 对话记录</button>
                     <button :class="{ active: currentPage === 'settings' }" @click="currentPage = 'settings'">⚙️ 设置</button>
                 </nav>
@@ -1058,6 +1058,14 @@
                 const prevPage = () => { if (page.value > 1) { page.value--; loadMemories(); } };
                 const nextPage = () => { page.value++; loadMemories(); };
 
+                const switchToMemories = () => {
+                    currentPage.value = 'memories';
+                    page.value = 1;
+                    filterType.value = '';
+                    searchQuery.value = '';
+                    loadMemories();
+                };
+
                 let healthCheckInterval = null;
 
                 onMounted(() => {
@@ -1101,7 +1109,7 @@
                     loadStats, loadApiStats, loadMemories, searchMemories, loadConversations, checkApiHealth,
                     loadLLMConfig, saveLLMConfig, testLLMConnection, autoFillApiUrl,
                     deleteMemory, editMemory, viewMemorySource, closeViewDialog, saveMemory, closeDialog, prevPage, nextPage,
-                    globalSearch, clearSearchResults, highlightText, Math
+                    globalSearch, clearSearchResults, highlightText, Math, switchToMemories
                 };
             }
         }).use(ElementPlus).mount('#app');
