@@ -251,7 +251,7 @@ class LLMSummarizer:
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.3,
-            "max_tokens": 300  # 增加输出长度限制
+            "max_tokens": 1000  # 增加输出长度限制，支持多条记忆
         }
 
         req = urllib.request.Request(
@@ -278,7 +278,7 @@ class LLMSummarizer:
 
         data = {
             "model": self.config.get('model', 'claude-sonnet-4-20250514'),
-            "max_tokens": 100,
+            "max_tokens": 1000,  # 增加输出长度限制，支持多条记忆
             "messages": [
                 {"role": "user", "content": prompt}
             ]
@@ -295,7 +295,7 @@ class LLMSummarizer:
             method='POST'
         )
 
-        with urllib.request.urlopen(req, timeout=30) as response:
+        with urllib.request.urlopen(req, timeout=60) as response:
             result = json.loads(response.read().decode('utf-8'))
             content = result.get('content', [{}])[0].get('text', '').strip()
             return content if content else None

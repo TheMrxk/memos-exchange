@@ -222,24 +222,24 @@ class MemorySearchEngine:
             match = re.search(pattern, content, re.IGNORECASE)
             if match:
                 result = formatter(match)
-                # 如果提取的结果过长，截断
-                if len(result) > 200:
-                    result = result[:197] + "..."
+                # 如果提取的结果过长，截断（增加到 500 字符）
+                if len(result) > 500:
+                    result = result[:497] + "..."
                 return result
 
-        # 如果没有匹配到模式，检查内容是否简短（<50 字），直接返回
-        if len(content) <= 50:
+        # 如果没有匹配到模式，检查内容是否简短（<100 字），直接返回
+        if len(content) <= 100:
             return content
 
         # 内容较长时，尝试提取第一句有意义的话
         sentences = re.split(r'[。！？!?；;]', content)
         for sentence in sentences:
             sentence = sentence.strip()
-            if len(sentence) >= 5 and len(sentence) <= 100:
+            if len(sentence) >= 5 and len(sentence) <= 300:  # 增加到 300 字符
                 return sentence
 
-        # 默认返回清理后的内容
-        return content[:150] if len(content) > 150 else content
+        # 默认返回清理后的内容（增加到 500 字符）
+        return content[:500] if len(content) > 500 else content
 
     def add_memory_from_conversation(
         self,
