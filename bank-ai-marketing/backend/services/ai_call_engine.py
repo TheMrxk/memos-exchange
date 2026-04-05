@@ -8,13 +8,17 @@ import queue
 import time
 import logging
 import asyncio
-from typing import Optional, Dict, Any
+import tempfile
+import wave
+from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from enum import Enum
 
 from .freeswitch_client import FreeSWITCHClient, CallState, CallInfo
 from .llm_client import LLMClient
 from .doubao_tts import DoubaoTTS as TTSClient
+from .audio_stream import AudioStreamManager, AudioSourceType, AudioConfig, FileAudioStream
+from .vad_detector import VoiceActivityDetector, VADConfig, VADState, VADMode
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +39,48 @@ class CallDirection(Enum):
 class AIcallConfig:
     """AI 通话配置"""
     max_duration: int = 300  # 最大通话时长（秒）
-    vad_sensitivity: float = 0.5  # VAD 灵敏度
+    vad_sensitivity: float = 0.5  # VAD 灵敏度 (0.0-1.0)
     silence_timeout: float = 3.0  # 沉默超时时间（秒）
     greeting_delay: float = 1.0  # 接通后延迟播放问候语（秒）
     asr_ws_url: str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"  # ASR WebSocket URL
+
+    # 音频流配置
+    audio_sample_rate: int = 16000  # 音频采样率
+    audio_frame_duration_ms: int = 20  # 音频帧时长 (毫秒)
+
+    # VAD 配置
+    vad_mode: str = "aggressive"  # VAD 模式：normal/low_bitrate/aggressive/very_aggressive
+    vad_speech_threshold: int = 3  # 判定为语音的帧数阈值
+    vad_silence_threshold: int = 5  # 判定为静音的帧数阈值
+    vad_min_speech_duration_ms: int = 200  # 最小语音时长
+    vad_max_silence_duration_ms: int = 3000  # 最大静音时长
+
+    def to_vad_config(self) -> VADConfig:
+        """转换为 VAD 配置"""
+        mode_map = {
+            "normal": VADMode.NORMAL,
+            "low_bitrate": VADMode.LOW_BITRATE,
+            "aggressive": VADMode.AGGRESSIVE,
+            "very_aggressive": VADMode.VERY_AGGRESSIVE
+        }
+        return VADConfig(
+            mode=mode_map.get(self.vad_mode, VADMode.AGGRESSIVE),
+            sample_rate=self.audio_sample_rate,
+            frame_duration_ms=self.audio_frame_duration_ms,
+            speech_threshold=self.vad_speech_threshold,
+            silence_threshold=self.vad_silence_threshold,
+            min_speech_duration_ms=self.vad_min_speech_duration_ms,
+            max_silence_duration_ms=self.vad_max_silence_duration_ms
+        )
+
+    def to_audio_config(self) -> AudioConfig:
+        """转换为音频配置"""
+        return AudioConfig(
+            sample_rate=self.audio_sample_rate,
+            bits_per_sample=16,
+            channels=1,
+            frame_duration_ms=self.audio_frame_duration_ms
+        )
 
 
 class AIcallSession:
@@ -224,41 +266,145 @@ class AIcallSession:
         """
         监听客户语音
 
+        流程:
+        1. 使用 VAD 检测语音活动
+        2. 收集语音片段
+        3. 调用 ASR 识别
+
         Returns:
             str: 识别到的文本，超时无语音返回 None
         """
         logger.debug("开始监听客户语音...")
 
-        # TODO: 实现 RTP 音频流接收和 ASR 识别
-        # 当前使用 ASR WebSocket 客户端进行测试
-        # 后续需要接入 FreeSWITCH 的 RTP 流
+        # 初始化 VAD
+        try:
+            vad = VoiceActivityDetector(self.config.to_vad_config())
+        except RuntimeError as e:
+            logger.warning(f"VAD 不可用，使用超时检测：{e}")
+            return self._listen_for_speech_timeout(timeout)
 
-        # 从音频队列接收音频数据
-        audio_chunks = []
+        # 音频缓冲
+        audio_chunks: List[bytes] = []
+        speech_detected = False
+        speech_end_detected = False
         start_time = time.time()
 
-        while not self._stop_flag.is_set() and (time.time() - start_time) < timeout:
+        # 创建临时音频流（用于测试，实际应使用 RTP 流）
+        # 这里使用音频队列模拟
+        audio_config = self.config.to_audio_config()
+        bytes_per_frame = audio_config.bytes_per_frame
+
+        logger.info(f"VAD 已启动，等待客户说话...")
+
+        while (not self._stop_flag.is_set() and
+               not speech_end_detected and
+               (time.time() - start_time) < timeout):
+
+            # 从音频队列获取数据
             try:
-                chunk = self.audio_queue.get(timeout=0.5)
-                if chunk:
-                    audio_chunks.append(chunk)
+                frame = self.audio_queue.get(timeout=0.5)
             except queue.Empty:
+                # 无音频数据，检查 VAD 超时
+                elapsed = time.time() - start_time
+                if elapsed > self.config.silence_timeout:
+                    logger.debug("监听超时，无语音")
+                    return None
                 continue
 
-        if not audio_chunks:
-            logger.debug("未检测到语音活动")
+            # VAD 检测
+            try:
+                state = vad.process_frame(frame)
+
+                if state == VADState.SPEECH_START:
+                    logger.debug("检测到语音开始")
+                    speech_detected = True
+                    audio_chunks = [frame]  # 清空之前的静音，保留当前帧
+
+                elif state == VADState.SPEECH:
+                    if speech_detected:
+                        audio_chunks.append(frame)
+
+                elif state == VADState.SPEECH_END:
+                    logger.debug("检测到语音结束")
+                    speech_end_detected = True
+
+            except Exception as e:
+                logger.warning(f"VAD 处理失败：{e}")
+                # VAD 失败时使用简单能量检测
+                if self._is_voice_frame(frame):
+                    if not speech_detected:
+                        logger.debug("检测到语音（能量）")
+                        speech_detected = True
+                    audio_chunks.append(frame)
+                else:
+                    if speech_detected and len(audio_chunks) > 10:
+                        speech_end_detected = True
+
+        # 处理识别结果
+        if not audio_chunks or len(audio_chunks) < 5:  # 至少 5 帧
+            logger.debug("语音太短，忽略")
             return None
 
         # 拼接音频数据
         audio_data = b''.join(audio_chunks)
-        logger.debug(f"收到音频数据：{len(audio_data)} 字节")
+        logger.info(f"收到语音数据：{len(audio_data)} 字节，时长约 {len(audio_data) / 64:.0f}ms")
 
-        # 使用 ASR 进行识别（需要在单独线程中运行异步代码）
-        try:
-            return self._run_asr_recognition(audio_data)
-        except Exception as e:
-            logger.error(f"ASR 识别失败：{e}")
+        # ASR 识别
+        return self._run_asr_recognition(audio_data)
+
+    def _listen_for_speech_timeout(self, timeout: float = 10.0) -> Optional[str]:
+        """
+        超时监听（VAD 不可用时的降级方案）
+
+        Returns:
+            str: 识别到的文本
+        """
+        logger.debug("使用超时监听模式...")
+
+        audio_chunks = []
+        start_time = time.time()
+        bytes_per_frame = self.config.to_audio_config().bytes_per_frame
+
+        while (not self._stop_flag.is_set() and
+               (time.time() - start_time) < timeout):
+
+            try:
+                frame = self.audio_queue.get(timeout=0.5)
+                audio_chunks.append(frame)
+
+                # 简单的语音时长检测
+                if len(audio_chunks) * bytes_per_frame >= 64000:  # 至少 1 秒
+                    break
+
+            except queue.Empty:
+                continue
+
+        if not audio_chunks:
             return None
+
+        audio_data = b''.join(audio_chunks)
+        return self._run_asr_recognition(audio_data)
+
+    def _is_voice_frame(self, audio_frame: bytes) -> bool:
+        """
+        简单的能量检测，判断是否为语音帧
+
+        Args:
+            audio_frame: PCM 音频帧
+
+        Returns:
+            bool: 是否可能是语音
+        """
+        # 计算平均能量
+        import struct
+        total = 0
+        for i in range(0, len(audio_frame), 2):
+            if i + 1 < len(audio_frame):
+                sample = struct.unpack('<h', audio_frame[i:i+2])[0]
+                total += abs(sample)
+
+        avg_energy = total / (len(audio_frame) // 2) if audio_frame else 0
+        return avg_energy > 100  # 能量阈值
 
     def _run_asr_recognition(self, audio_data: bytes) -> Optional[str]:
         """运行 ASR 识别（在单独线程中执行异步代码）"""
