@@ -17,8 +17,8 @@ class DoubaoTTS:
         access_token: str = "HthevSMrUFC7z8Nxfb0yKFyR1XVNeW-W",
         resource_id: str = "seed-tts-2.0",
         speaker: str = "zh_female_vv_uranus_bigtts",
-        sample_rate: int = 24000,
-        format: str = "mp3"
+        sample_rate: int = 16000,  # ASR 兼容的采样率
+        format: str = "wav"  # PCM WAV 格式
     ):
         self.app_id = app_id
         self.access_token = access_token
