@@ -105,8 +105,10 @@ python3 asr_websocket_client.py --file test_asr.wav
 | **LLM 集成** | ✅ 完成 | 100% | DeepSeek/通义千问已支持 |
 | **TTS 集成** | ✅ 完成 | 100% | 豆包语音合成模型 2.0 |
 | **ASR 集成** | ✅ 完成 | 100% | 豆包流式语音识别模型 2.0 WebSocket 客户端已测试通过 |
+| **音频流捕获** | ✅ 完成 | 90% | 支持文件/RTP/HTTP 音频流，待 FreeSWITCH 集成 |
+| **VAD 语音检测** | ✅ 完成 | 95% | WebRTC VAD 已集成，测试通过率 90% |
 | **FreeSWITCH 电话引擎** | ⏸️ 暂停 | 30% | 需要解决镜像模块问题 |
-| **AI 对话引擎** | ✅ 完成 | 95% | ASR→LLM→TTS 完整链路已集成，待 RTP 流接入 | |
+| **AI 对话引擎** | ✅ 完成 | 98% | ASR→LLM→TTS 完整链路已集成，VAD 已实现 |
 
 ### 目录结构
 
@@ -115,19 +117,26 @@ bank-ai-marketing/
 ├── README.md                    # 项目说明
 ├── PROGRESS.md                  # 本文档
 ├── TTS_INTEGRATION.md           # TTS 集成文档
+├── ASR_INTEGRATION_REPORT.md    # ASR 集成报告（新增）
+├── STREAMING_OPTIMIZATION.md    # 流式优化方案（新增）
 ├── docker-compose.yml           # Docker 编排
 ├── backend/
 │   ├── app.py                   # Flask 应用入口
 │   ├── models.py                # 数据库模型
 │   ├── routes_calls.py          # 通话控制 API
-│   ├── asr_websocket_client.py  # ASR WebSocket 客户端（新增）
+│   ├── asr_websocket_client.py  # ASR WebSocket 客户端
+│   ├── test_asr_demo.py         # ASR 识别演示
+│   ├── test_asr_llm_tts_chain.py # 端到端链路测试
+│   ├── test_vad.py              # VAD 测试脚本
 │   └── services/
 │       ├── tts_client.py        # TTS 客户端
 │       ├── doubao_tts.py        # 豆包 TTS 模块
 │       ├── llm_client.py        # LLM 客户端
-│       ├── asr_client.py        # ASR 客户端（HTTP 备用方案）
-│       ├── ai_call_engine.py    # AI 通话引擎（已集成 ASR）
-│       └── freeswitch_client.py # FreeSWITCH 客户端
+│       ├── asr_client.py        # ASR 客户端（统一接口）
+│       ├── ai_call_engine.py    # AI 通话引擎（已集成 ASR/VAD）
+│       ├── freeswitch_client.py # FreeSWITCH 客户端
+│       ├── audio_stream.py      # 音频流捕获模块（新增）
+│       └── vad_detector.py      # VAD 语音检测（新增）
 ├── web-frontend/                # Vue3 前端
 └── test_*.py                    # 测试脚本集
 ```
@@ -223,20 +232,36 @@ X-Api-Resource-Id: volc.seedasr.sauc.duration  # 小时版
 WebSocket URL: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
 ```
 
-### 4.2 AI 对话引擎完善 ✅ 已完成 95%
+### 4.2 AI 对话引擎完善 ✅ 已完成 98%
 
 **当前状态**: 
 - ASR 客户端已实现 WebSocket 协议 ✅
 - TTS 客户端已完成 ✅
 - LLM 客户端已完成 ✅
 - `ai_call_engine.py` 已接入真实 ASR ✅
+- VAD 语音活动检测已集成 ✅
+- 音频流捕获模块已实现 ✅
 
 **已完成**:
 1. ✅ 在 `ai_call_engine.py` 中调用 ASR 客户端
 2. ✅ 实现临时 WAV 文件转换
 3. ✅ 支持临时结果和确定结果返回
-4. ⏸️ RTP 音频流接收（需要 FreeSWITCH 集成）
-5. ⏸️ VAD 语音活动检测（待实现）
+4. ✅ VAD 语音活动检测 (WebRTC VAD)
+5. ✅ 音频流捕获模块 (支持文件/RTP/HTTP)
+6. ⏸️ RTP 音频流接收（需要 FreeSWITCH 模块配合）
+
+**新增模块**:
+- `services/audio_stream.py` - 音频流捕获和管理
+- `services/vad_detector.py` - VAD 语音活动检测
+- `test_vad.py` - VAD 测试脚本
+
+**VAD 测试结果**:
+```bash
+python3 test_vad.py test_asr.wav
+# 语音帧数：96 (90.6%)
+# 静音帧数：10 (9.4%)
+# VAD 检测正常
+```
 
 **完整数据流**:
 ```
@@ -244,7 +269,9 @@ WebSocket URL: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
     ↓
 FreeSWITCH (RTP 流)
     ↓
-音频采集 (PCM 16kHz)
+音频采集 (G.711 → PCM 16kHz)
+    ↓
+VAD 语音活动检测
     ↓
 ASR 服务 (火山引擎豆包 ASR WebSocket)
     ↓
