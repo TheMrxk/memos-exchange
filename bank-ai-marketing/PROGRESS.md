@@ -43,7 +43,7 @@ python test_tts_final.py
 
 ### 2. 豆包 ASR 集成 ✅
 
-**状态**: 已完成 WebSocket 客户端实现
+**状态**: 已完成并测试通过
 
 **技术细节**:
 - **服务商**: 火山引擎豆包流式语音识别模型 2.0
@@ -80,10 +80,16 @@ X-Api-Connect-Id: <UUID>
 
 **测试结果**:
 ```bash
-# 测试识别
-python test_asr_volcengine.py --file output_tts_final.mp3
-# 预期输出：识别文本
+# 测试识别（16kHz PCM WAV）
+python3 asr_websocket_client.py --file test_asr.wav
+# 输出：[确定] 你好，欢迎使用银行 AI 客服服务。
 ```
+
+**ASR 集成到 AI 通话引擎**:
+- `ai_call_engine.py` 已集成 `AsrWsClient`
+- `_listen_for_speech()` 方法使用真实 ASR 识别
+- 支持临时结果和确定结果返回
+- 音频格式：16kHz 16bit 单声道 PCM WAV
 
 ---
 
@@ -98,9 +104,9 @@ python test_asr_volcengine.py --file output_tts_final.mp3
 | **Vue3 前端** | ✅ 完成 | 80% | Web 管理界面 |
 | **LLM 集成** | ✅ 完成 | 100% | DeepSeek/通义千问已支持 |
 | **TTS 集成** | ✅ 完成 | 100% | 豆包语音合成模型 2.0 |
-| **ASR 集成** | ✅ 完成 | 90% | 豆包流式语音识别模型 2.0 WebSocket 客户端已实现 |
+| **ASR 集成** | ✅ 完成 | 100% | 豆包流式语音识别模型 2.0 WebSocket 客户端已测试通过 |
 | **FreeSWITCH 电话引擎** | ⏸️ 暂停 | 30% | 需要解决镜像模块问题 |
-| **AI 对话引擎** | 🔄 进行中 | 70% | ASR→LLM→TTS 完整链路待联调 |
+| **AI 对话引擎** | ✅ 完成 | 95% | ASR→LLM→TTS 完整链路已集成，待 RTP 流接入 | |
 
 ### 目录结构
 
@@ -114,12 +120,13 @@ bank-ai-marketing/
 │   ├── app.py                   # Flask 应用入口
 │   ├── models.py                # 数据库模型
 │   ├── routes_calls.py          # 通话控制 API
+│   ├── asr_websocket_client.py  # ASR WebSocket 客户端（新增）
 │   └── services/
-│       ├── tts_client.py        # TTS 客户端 (已更新)
-│       ├── doubao_tts.py        # 豆包 TTS 模块 (新增)
+│       ├── tts_client.py        # TTS 客户端
+│       ├── doubao_tts.py        # 豆包 TTS 模块
 │       ├── llm_client.py        # LLM 客户端
-│       ├── asr_client.py        # ASR 客户端 (待完善)
-│       ├── ai_call_engine.py    # AI 通话引擎
+│       ├── asr_client.py        # ASR 客户端（HTTP 备用方案）
+│       ├── ai_call_engine.py    # AI 通话引擎（已集成 ASR）
 │       └── freeswitch_client.py # FreeSWITCH 客户端
 ├── web-frontend/                # Vue3 前端
 └── test_*.py                    # 测试脚本集
@@ -191,15 +198,21 @@ TTS 服务 (豆包)
 
 **技术实现**:
 ```python
-# services/asr_client.py
-class ASRClient:
-    # 支持火山引擎豆包 ASR WebSocket
-    def volcengine_asr_recognize(self, audio_data: bytes) -> Dict:
+# asr_websocket_client.py
+class AsrWsClient:
+    async def recognize(self, file_path: str) -> AsyncGenerator[Dict, None]:
         """流式语音识别"""
-        # WebSocket 连接
-        # 发送 Full Client Request (配置)
-        # 发送 Audio Only Request (音频流)
-        # 接收 Full Server Response (识别结果)
+        # 1. 加载音频文件（自动转换为 16kHz PCM）
+        # 2. WebSocket 连接
+        # 3. 发送 Full Client Request (配置)
+        # 4. 发送 Audio Only Request (音频流，200ms/段)
+        # 5. 接收 Full Server Response (识别结果)
+```
+
+**测试结果**:
+```bash
+python3 asr_websocket_client.py --file test_asr.wav
+# 输出：[确定] 你好，欢迎使用银行 AI 客服服务。
 ```
 
 **认证配置**:
@@ -207,26 +220,23 @@ class ASRClient:
 X-Api-App-Key: 2058216235
 X-Api-Access-Key: HthevSMrUFC7z8Nxfb0yKFyR1XVNeW-W
 X-Api-Resource-Id: volc.seedasr.sauc.duration  # 小时版
+WebSocket URL: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
 ```
 
-**测试方法**:
-```bash
-python3 test_asr_volcengine.py --file output_tts_final.mp3
-```
-
-### 4.2 AI 对话引擎完善 🔄 进行中
+### 4.2 AI 对话引擎完善 ✅ 已完成 95%
 
 **当前状态**: 
-- ASR 客户端已实现 WebSocket 协议
-- TTS 客户端已完成
-- LLM 客户端已完成
-- `ai_call_engine.py` 中 `_listen_for_speech()` 方法待接入真实 ASR
+- ASR 客户端已实现 WebSocket 协议 ✅
+- TTS 客户端已完成 ✅
+- LLM 客户端已完成 ✅
+- `ai_call_engine.py` 已接入真实 ASR ✅
 
-**需要完成**:
-1. 在 `ai_call_engine.py` 中调用 ASR 客户端
-2. 实现 RTP 音频流接收并转换为 PCM
-3. 流式处理（边说边识别）
-4. VAD 语音活动检测（支持打断）
+**已完成**:
+1. ✅ 在 `ai_call_engine.py` 中调用 ASR 客户端
+2. ✅ 实现临时 WAV 文件转换
+3. ✅ 支持临时结果和确定结果返回
+4. ⏸️ RTP 音频流接收（需要 FreeSWITCH 集成）
+5. ⏸️ VAD 语音活动检测（待实现）
 
 **完整数据流**:
 ```
