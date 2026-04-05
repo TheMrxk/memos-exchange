@@ -41,6 +41,50 @@ python test_tts_final.py
 2. 音色必须是实例绑定的 `zh_female_vv_uranus_bigtts`
 3. V3 HTTP 单向流式 API 是最稳定的调用方式
 
+### 2. 豆包 ASR 集成 ✅
+
+**状态**: 已完成 WebSocket 客户端实现
+
+**技术细节**:
+- **服务商**: 火山引擎豆包流式语音识别模型 2.0
+- **实例**: Doubao_Seed_ASR_Streaming_2.02000000693482876194
+- **Resource ID**: 
+  - 小时版：`volc.seedasr.sauc.duration`
+  - 并发版：`volc.seedasr.sauc.concurrent`
+- **WebSocket 端点**:
+  - 双向流式（推荐）: `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async`
+  - 流式输入模式：`wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream`
+  - 双向流式旧版：`wss://openspeech.bytedance.com/api/v3/sauc/bigmodel`
+
+**认证方式**:
+```
+X-Api-App-Key: 2058216235
+X-Api-Access-Key: HthevSMrUFC7z8Nxfb0yKFyR1XVNeW-W
+X-Api-Resource-Id: volc.seedasr.sauc.duration
+X-Api-Connect-Id: <UUID>
+```
+
+**输出文件**:
+- `services/asr_client.py` - 已更新支持火山引擎 ASR
+- `test_asr_volcengine.py` - ASR 测试脚本
+
+**协议详情**:
+- 二进制协议，4 字节 header
+- 支持 Gzip 压缩
+- Sequence 机制保证顺序
+- 事件类型：
+  - 0b0001: Full Client Request (首包配置)
+  - 0b0010: Audio Only Request (音频流)
+  - 0b1001: Full Server Response (识别结果)
+  - 0b1111: Error Response
+
+**测试结果**:
+```bash
+# 测试识别
+python test_asr_volcengine.py --file output_tts_final.mp3
+# 预期输出：识别文本
+```
+
 ---
 
 ## 二、项目整体状态
@@ -54,9 +98,9 @@ python test_tts_final.py
 | **Vue3 前端** | ✅ 完成 | 80% | Web 管理界面 |
 | **LLM 集成** | ✅ 完成 | 100% | DeepSeek/通义千问已支持 |
 | **TTS 集成** | ✅ 完成 | 100% | 豆包语音合成模型 2.0 |
-| **ASR 集成** | ❌ 待开发 | 0% | 需要集成语音识别 |
+| **ASR 集成** | ✅ 完成 | 90% | 豆包流式语音识别模型 2.0 WebSocket 客户端已实现 |
 | **FreeSWITCH 电话引擎** | ⏸️ 暂停 | 30% | 需要解决镜像模块问题 |
-| **AI 对话引擎** | ⏸️ 待开发 | 40% | 等待 ASR 集成 |
+| **AI 对话引擎** | 🔄 进行中 | 70% | ASR→LLM→TTS 完整链路待联调 |
 
 ### 目录结构
 
@@ -141,45 +185,71 @@ TTS 服务 (豆包)
 
 ## 四、待完成任务
 
-### 4.1 ASR 集成 (优先级：高)
+### 4.1 ASR 集成 ✅ 已完成
 
-**目标**: 将客户语音实时转换为文本
+**实现方式**: 火山引擎豆包流式语音识别模型 2.0 WebSocket API
 
-**可选方案**:
-
-| 方案 | 服务商 | 优点 | 缺点 |
-|------|--------|------|------|
-| **方案 A** | FunASR 本地部署 | 免费、离线 | 需要部署服务器 |
-| **方案 B** | 火山引擎 ASR | 与 TTS 同平台、稳定 | 按量收费 |
-| **方案 C** | 阿里 FunASR 云 | 准确率高 | 需要单独配置 |
-
-**推荐**: 方案 B (火山引擎 ASR)，原因：
-1. 与豆包 TTS 同一平台，认证统一
-2. 流式识别，延迟低
-3. 支持实时打断
-
-**需要实现**:
+**技术实现**:
 ```python
 # services/asr_client.py
-class VolcengineASR:
-    def recognize_stream(self, audio_chunk) -> str:
+class ASRClient:
+    # 支持火山引擎豆包 ASR WebSocket
+    def volcengine_asr_recognize(self, audio_data: bytes) -> Dict:
         """流式语音识别"""
-        pass
-    
-    def recognize_file(self, audio_file) -> str:
-        """文件识别"""
-        pass
+        # WebSocket 连接
+        # 发送 Full Client Request (配置)
+        # 发送 Audio Only Request (音频流)
+        # 接收 Full Server Response (识别结果)
 ```
 
-### 4.2 AI 对话引擎完善 (优先级：高)
+**认证配置**:
+```
+X-Api-App-Key: 2058216235
+X-Api-Access-Key: HthevSMrUFC7z8Nxfb0yKFyR1XVNeW-W
+X-Api-Resource-Id: volc.seedasr.sauc.duration  # 小时版
+```
 
-**当前状态**: `ai_call_engine.py` 中 `_listen_for_speech()` 方法返回模拟数据
+**测试方法**:
+```bash
+python3 test_asr_volcengine.py --file output_tts_final.mp3
+```
 
-**需要实现**:
-1. 接收 FreeSWITCH RTP 音频流
-2. 调用 ASR 实时识别
+### 4.2 AI 对话引擎完善 🔄 进行中
+
+**当前状态**: 
+- ASR 客户端已实现 WebSocket 协议
+- TTS 客户端已完成
+- LLM 客户端已完成
+- `ai_call_engine.py` 中 `_listen_for_speech()` 方法待接入真实 ASR
+
+**需要完成**:
+1. 在 `ai_call_engine.py` 中调用 ASR 客户端
+2. 实现 RTP 音频流接收并转换为 PCM
 3. 流式处理（边说边识别）
 4. VAD 语音活动检测（支持打断）
+
+**完整数据流**:
+```
+客户说话 (音频流)
+    ↓
+FreeSWITCH (RTP 流)
+    ↓
+音频采集 (PCM 16kHz)
+    ↓
+ASR 服务 (火山引擎豆包 ASR WebSocket)
+    ↓
+识别结果 (文本)
+    ↓
+LLM 处理 (DeepSeek)
+    ↓
+AI 回复 (文本)
+    ↓
+TTS 服务 (豆包语音合成 2.0)
+    ↓
+合成音频 (MP3/WAV)
+    ↓
+播放给客户 (FreeSWITCH)
+```
 
 ### 4.3 FreeSWITCH 模块 (优先级：中)
 
@@ -230,7 +300,7 @@ class VolcengineASR:
 | 数据库 | MySQL 8.0 | ✅ |
 | LLM | DeepSeek / 通义千问 | ✅ |
 | TTS | 豆包语音合成模型 2.0 | ✅ |
-| ASR | 待选择 (推荐火山引擎) | ❌ |
+| ASR | 火山引擎豆包流式语音识别 2.0 | ✅ |
 | 电话引擎 | FreeSWITCH | ⏸️ |
 | 容器化 | Docker Compose | ✅ |
 
@@ -313,10 +383,12 @@ DOUBAO_ACCESS_TOKEN=HthevSMrUFC7z8Nxfb0yKFyR1XVNeW-W
 DOUBAO_RESOURCE_ID=seed-tts-2.0
 DOUBAO_SPEAKER=zh_female_vv_uranus_bigtts
 
-# ASR 配置 (待配置)
-ASR_PROVIDER=volcengine
-ASR_ACCESS_TOKEN=XXX
-ASR_RESOURCE_ID=seed-asr-2.0
+# ASR 配置 (火山引擎豆包)
+ASR_PROVIDER=volcengine_doubao
+DOUBAO_APPID=2058216235
+DOUBAO_ACCESS_TOKEN=HthevSMrUFC7z8Nxfb0yKFyR1XVNeW-W
+DOUBAO_ASR_RESOURCE_ID=volc.seedasr.sauc.duration
+DOUBAO_ASR_WS_URL=wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
 
 # FreeSWITCH 配置
 FREESWITCH_HOST=localhost
